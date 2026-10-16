@@ -1,0 +1,30 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python: ["3.11", "3.13"]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10
+        with:
+          python-version: ${{ matrix.python }}
+      - run: uv sync --extra dev
+      - run: uv run ruff check .
+      - run: uv run ruff format --check .
+      - run: uv run pytest -q
+      - name: Smoke test the benchmark end to end
+        run: |
+          uv run engram-bench generate --out /tmp/bench --users 4 --sessions 9 --seed 1
+          uv run engram-bench run --bench /tmp/bench --system oracle --out /tmp/run-oracle
+          uv run engram-bench report /tmp/run-oracle

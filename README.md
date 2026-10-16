@@ -75,6 +75,7 @@ Details, hypotheses and compute assumptions are in [research/experiment-plan.md]
 | [**Landscape**](research/landscape.md) | Survey of about 90 verified sources: test-time training, Titans and its follow-ups, Nested Learning, memory layers, retrofitting memory onto frozen models, SSMs and hybrids, continual learning, consolidation, per-user LoRA, model editing and unlearning |
 | [**Eval design**](research/eval-design.md) | Draft of `engram-bench`: protocol, synthetic users, 12 task categories, forgetting and leakage checks, baselines |
 | [**Experiment plan**](research/experiment-plan.md) | Phases 0–3 with hypotheses, decision gates and compute estimates (stated as assumptions) |
+| [**Phase 0 plan**](research/phase-0-plan.md) | Gate for entering Phase 1, workstreams, timeline, budget, decisions needed |
 | [**Open questions**](research/open-questions.md) | What we don't know yet, ordered by how much the answer could change the design |
 
 **Where the evidence points so far** (October 2026):
@@ -86,7 +87,28 @@ Details, hypotheses and compute assumptions are in [research/experiment-plan.md]
 
 ## Status
 
-**Research preview, Phase 0. There is no code or model weights yet.** The literature survey, eval design and experiment plan are drafted, and the work is tracked in [Phase 0 issues](https://github.com/alinaos-org/engram/milestone/1). Nothing here is production-ready, and every compute figure is an assumption until it is measured.
+**Research preview, Phase 0. No model weights yet.** The literature survey, eval design and experiment plan are drafted. The first version of the benchmark harness (`engram-bench`) is in [`engram/`](engram/): synthetic-user generator, probes, scorers, baselines B0/B1/B2/B3, and the cross-user leakage harness. The path to Phase 1 is in [research/phase-0-plan.md](research/phase-0-plan.md), and the work is tracked in [Phase 0 issues](https://github.com/alinaos-org/engram/milestone/1). Nothing here is production-ready, and every compute figure is an assumption until it is measured.
+
+### Quickstart
+
+Requires Python 3.11+ and [uv](https://docs.astral.sh/uv/). Everything below runs on a CPU with no model; mock models stand in.
+
+```bash
+uv sync --extra dev
+uv run pytest -q
+uv run engram-bench generate --out data/bench-v0 --users 50 --sessions 30 --seed 0
+uv run engram-bench run --bench data/bench-v0 --system oracle --out runs/oracle
+uv run engram-bench run --bench data/bench-v0 --system b3 --mock parrot --out runs/b3-parrot
+```
+
+To test a real model, serve it behind any OpenAI-compatible endpoint (for example vLLM) and pass `--model NAME --base-url URL`. For hosted APIs, add `--api-key-env VAR`; the key is read from that environment variable and is never written to run manifests.
+
+```bash
+uv run engram-bench run --bench data/bench-v0 --system b3 --model qwen3-8b --base-url http://localhost:8000/v1 --out runs/b3-qwen3-8b
+uv run engram-bench report runs/b3-qwen3-8b --floor runs/b0-qwen3-8b
+```
+
+`engram-compute` reproduces the compute assumptions in the experiment plan, so you can change them and re-run.
 
 ## Contributing
 

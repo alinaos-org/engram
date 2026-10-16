@@ -229,3 +229,7 @@ wandb/
 *.ckpt
 data/raw/
 data/private/
+
+# engram-bench outputs
+data/
+runs/
