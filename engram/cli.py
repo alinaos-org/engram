@@ -171,6 +171,71 @@ def cmd_judge(args) -> None:
     print(report(result.scores, result.leaks, f"{result.manifest.get('system_name')} (judged)"))
 
 
+def cmd_calibrate(args) -> None:
+    """Judge calibration (issue #2). ``export`` writes a CSV of answers to label by hand (column
+    ``human``: 1 = correct, 0 = wrong); ``score`` compares those labels with the judge's."""
+    import csv
+    import random
+
+    from engram.bench.judge import LLMJudge, cohen_kappa
+
+    if args.action == "export":
+        bench = dataset.load(Path(args.bench))
+        probes = {p.id: p for p in bench.probes()}
+        scores = [s for s in load_run(Path(args.run)).scores if probes[s.probe_id].gold]
+        rng = random.Random(args.seed)
+        sample = rng.sample(scores, min(args.n, len(scores)))
+        with open(args.csv, "w", newline="") as f:
+            w = csv.writer(f)
+            w.writerow(["probe_id", "question", "gold", "reject", "answer", "human"])
+            for s in sample:
+                p = probes[s.probe_id]
+                w.writerow([s.probe_id, p.question, p.gold, "; ".join(p.reject), s.answer, ""])
+        print(f"wrote {len(sample)} rows to {args.csv}; fill the 'human' column with 1 or 0")
+        return
+    with open(args.csv, newline="") as f:
+        rows = [r for r in csv.DictReader(f) if r["human"].strip() in {"0", "1"}]
+    if not rows:
+        sys.exit("no labelled rows (human column must be 0 or 1)")
+    judge = LLMJudge(_model(args))
+    verdicts = [
+        judge.grade(
+            r["question"], r["gold"], [x for x in r["reject"].split("; ") if x], r["answer"]
+        )
+        for r in rows
+    ]
+    human = [r["human"].strip() == "1" for r in rows]
+    agree = sum(a == b for a, b in zip(verdicts, human, strict=True)) / len(rows)
+    print(f"n={len(rows)} agreement={agree:.3f} kappa={cohen_kappa(verdicts, human):.3f} "
+          f"judge={judge.model.name}")  # fmt: skip
+
+
+def cmd_compare(args) -> None:
+    """Markdown table of accuracy (with 95% CI) by category, one column per run."""
+    from engram.bench.scoring import summarise
+
+    floor = load_run(Path(args.floor)).scores if args.floor else None
+    cols, names = [], []
+    for run_dir in args.runs:
+        result = load_run(Path(run_dir))
+        scores = apply_floor(result.scores, floor) if floor else result.scores
+        cols.append({s.category: s for s in summarise(scores)})
+        leaks = sum(c.leaked for c in result.leaks)
+        suffix = f" (leaks {leaks}/{len(result.leaks)})" if result.leaks else ""
+        names.append(f"{result.manifest.get('system_name', run_dir)}{suffix}")
+    cats = sorted({c for col in cols for c in col}, key=lambda c: (c == "ALL", c))
+    print("| category | " + " | ".join(names) + " |")
+    print("|---|" + "---|" * len(names))
+    for cat in cats:
+        cells = []
+        for col in cols:
+            s = col.get(cat)
+            cells.append(
+                f"{s.accuracy:.2f} [{s.ci_low:.2f}, {s.ci_high:.2f}] (n={s.n})" if s else "–"
+            )
+        print(f"| {cat} | " + " | ".join(cells) + " |")
+
+
 def cmd_rescore(args) -> None:
     bench = dataset.load(Path(args.bench))
     result = rescore(load_run(Path(args.run)), bench)
@@ -256,6 +321,25 @@ def main(argv: list[str] | None = None) -> None:
     j.add_argument("--workers", type=int, default=4)
     j.add_argument("--out", help="write the judged run here instead of in place")
     j.set_defaults(func=cmd_judge)
+
+    c = sub.add_parser("calibrate", help="export answers to label, or score the judge vs labels")
+    c.add_argument("action", choices=["export", "score"])
+    c.add_argument("csv")
+    c.add_argument("--run", help="export: run directory to sample answers from")
+    c.add_argument("--bench", help="export: the run's benchmark directory")
+    c.add_argument("--n", type=int, default=60)
+    c.add_argument("--seed", type=int, default=0)
+    c.add_argument("--model", help="score: judge model spec")
+    c.add_argument("--mock", choices=["null", "parrot"])
+    c.add_argument("--base-url", default="http://localhost:8000/v1")
+    c.add_argument("--api-key-env")
+    c.add_argument("--effort", default="low")
+    c.set_defaults(func=cmd_calibrate)
+
+    cp = sub.add_parser("compare", help="markdown table comparing several runs")
+    cp.add_argument("runs", nargs="+")
+    cp.add_argument("--floor", help="a B0 run; drops probes it already answers")
+    cp.set_defaults(func=cmd_compare)
 
     rs = sub.add_parser("rescore", help="re-score a saved run's answers with current rules")
     rs.add_argument("run")

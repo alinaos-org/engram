@@ -44,3 +44,25 @@ def test_cli_import_and_judge(tmp_path, capsys):
     assert manifest["judge"]["judged"] > 0
     rows = [json.loads(x) for x in (run_dir / "results.jsonl").read_text().splitlines()]
     assert sum(not r["correct"] for r in rows) == manifest["judge"]["judged"]
+
+
+def test_cli_calibrate_roundtrip(tmp_path, capsys):
+    import csv
+
+    data, run_dir, sheet = tmp_path / "b", tmp_path / "r", tmp_path / "labels.csv"
+    bench_main(["generate", "--out", str(data), "--users", "2", "--sessions", "6", "--seed", "3"])
+    bench_main(["run", "--bench", str(data), "--system", "oracle", "--no-leakage",
+                "--out", str(run_dir)])  # fmt: skip
+    bench_main(["calibrate", "export", str(sheet), "--run", str(run_dir), "--bench", str(data),
+                "--n", "5"])  # fmt: skip
+    with open(sheet, newline="") as f:
+        rows = list(csv.DictReader(f))
+    assert len(rows) == 5
+    for r in rows:
+        r["human"] = "1"
+    with open(sheet, "w", newline="") as f:
+        w = csv.DictWriter(f, fieldnames=list(rows[0]))
+        w.writeheader()
+        w.writerows(rows)
+    bench_main(["calibrate", "score", str(sheet), "--mock", "null"])
+    assert "agreement=0.000" in capsys.readouterr().out
