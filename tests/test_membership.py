@@ -169,6 +169,8 @@ def test_end_to_end_on_tiny_lora():
 
 
 def test_cli_membership_flag(tmp_path, capsys):
+    pytest.importorskip("torch")  # needs the ml extra; CI installs only dev
+    pytest.importorskip("peft")
     from engram.cli import main as bench_main
 
     data, out = tmp_path / "b", tmp_path / "r"
