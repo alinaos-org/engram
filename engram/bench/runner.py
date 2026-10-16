@@ -13,6 +13,7 @@ import subprocess
 import time
 from collections import defaultdict
 from collections.abc import Callable
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
@@ -49,46 +50,114 @@ def _git_commit() -> str | None:
         return None
 
 
+def _play_user(system: MemorySystem, user, sleeps: set[int], session_replies: bool) -> list[Score]:
+    """Run one user's full timeline through ``system`` and score that user's probes."""
+    due: dict[tuple[int, Phase], list[Probe]] = defaultdict(list)
+    for p in user.probes:
+        due[(p.ask_after_session, p.phase)].append(p)
+    clock = getattr(system, "set_clock", None)
+    observe = None if session_replies else getattr(system, "observe", None)
+    scores: list[Score] = []
+
+    def ask_due(s: int, phase: Phase) -> None:
+        if clock:
+            clock(s, phase.value)
+        for p in due.get((s, phase), []):
+            scores.append(score(p, ask(system, p.question)))
+
+    system.load_user(user.id)
+    for session in user.sessions:
+        system.start_session(write=not session.incognito)
+        for turn in session.turns:
+            if observe:
+                observe(turn.text)
+            else:
+                system.respond(turn.text)
+        system.end_session()
+        ask_due(session.index, Phase.PRE_SLEEP)
+        if session.index in sleeps:
+            system.sleep()
+            ask_due(session.index, Phase.POST_SLEEP)
+    system.unload_user()
+    return scores
+
+
+def _replay(system: MemorySystem, bench: Benchmark, sleeps: set[int]) -> None:
+    """Rebuild every user's memory in one instance without model calls (needs ``observe``)."""
+    for user in bench.users:
+        system.load_user(user.id)
+        for session in user.sessions:
+            system.start_session(write=not session.incognito)
+            for turn in session.turns:
+                system.observe(turn.text)  # type: ignore[attr-defined]
+            system.end_session()
+            if session.index in sleeps:
+                system.sleep()
+        system.unload_user()
+
+
 def run(
     bench: Benchmark,
     system: MemorySystem,
     *,
     leakage: bool = True,
     leak_targets_per_user: int = 3,
+    workers: int = 1,
+    session_replies: bool = True,
     progress: Callable[[str], None] | None = None,
 ) -> RunResult:
+    """Run ``system`` through the benchmark.
+
+    With ``workers > 1`` each user runs on a fresh instance from ``system.spawn()`` in its own
+    thread. The leakage pass then needs every user's memory in one instance, so it is rebuilt with
+    ``observe`` (no model calls) and probed through ``fork_readonly`` views in parallel. Systems
+    without those methods run with ``workers=1``, where one instance carries every user.
+
+    ``session_replies=False`` feeds session turns through ``observe`` instead of ``respond``. Only
+    valid for systems whose memory does not depend on their own replies (all current baselines).
+    """
     started = time.time()
     sleeps = set(bench.sleeps)
     result = RunResult()
-    clock = getattr(system, "set_clock", None)
+    parallel = workers > 1
+    if parallel and not (hasattr(system, "spawn") and hasattr(system, "observe")):
+        raise ValueError(f"{system.name} does not support parallel runs; use workers=1")
+    if not session_replies and not hasattr(system, "observe"):
+        raise ValueError(f"{system.name} has no observe(); it needs session_replies=True")
 
-    for user in bench.users:
-        due: dict[tuple[int, Phase], list[Probe]] = defaultdict(list)
-        for p in user.probes:
-            due[(p.ask_after_session, p.phase)].append(p)
+    done = 0
 
-        def ask_due(s: int, phase: Phase, due=due) -> None:
-            if clock:
-                clock(s, phase.value)
-            for p in due.get((s, phase), []):
-                result.scores.append(score(p, ask(system, p.question)))
-
-        system.load_user(user.id)
-        for session in user.sessions:
-            system.start_session(write=not session.incognito)
-            for turn in session.turns:
-                system.respond(turn.text)
-            system.end_session()
-            ask_due(session.index, Phase.PRE_SLEEP)
-            if session.index in sleeps:
-                system.sleep()
-                ask_due(session.index, Phase.POST_SLEEP)
-        system.unload_user()
+    def report_progress(user) -> None:
+        nonlocal done
+        done += 1
         if progress:
-            progress(f"{user.id}: {len(user.probes)} probes")
+            rate = (time.time() - started) / done
+            left = rate * (len(bench.users) - done)
+            progress(f"{done}/{len(bench.users)} users ({user.id}); ~{left / 60:.0f} min left")
+
+    if parallel:
+        with ThreadPoolExecutor(workers) as pool:
+            futures = {
+                pool.submit(_play_user, system.spawn(), u, sleeps, session_replies): u
+                for u in bench.users
+            }
+            by_user: dict[str, list[Score]] = {}
+            for fut in as_completed(futures):
+                by_user[futures[fut].id] = fut.result()
+                report_progress(futures[fut])
+        for user in bench.users:
+            result.scores.extend(by_user[user.id])
+    else:
+        for user in bench.users:
+            result.scores.extend(_play_user(system, user, sleeps, session_replies))
+            report_progress(user)
 
     if leakage:
-        result.leaks = run_leakage(bench, system, targets_per_user=leak_targets_per_user)
+        if parallel:
+            _replay(system, bench, sleeps)
+        result.leaks = run_leakage(
+            bench, system, targets_per_user=leak_targets_per_user, workers=workers
+        )
 
     result.manifest = {
         "engram_version": __version__,
@@ -97,12 +166,18 @@ def run(
         "system_name": system.name,
         "bench": {"config": asdict(bench.config), "writer": bench.writer},
         "bench_sha256": content_hash(bench),
+        "n_users": len(bench.users),
+        "workers": workers,
+        "session_replies": session_replies,
         "python": platform.python_version(),
         "host": platform.node(),
         "wall_clock_s": round(time.time() - started, 2),
         "n_scores": len(result.scores),
         "n_leak_checks": len(result.leaks),
     }
+    model = getattr(system, "model", None)
+    if model is not None and hasattr(model, "hits"):
+        result.manifest["cache"] = {"hits": model.hits, "misses": model.misses}
     return result
 
 
@@ -131,6 +206,13 @@ def load_run(path: Path) -> RunResult:
         leaks=[LeakCheck(**d) for d in lines("leakage.jsonl")],
         manifest=json.loads((path / "manifest.json").read_text()),
     )
+
+
+def rescore(result: RunResult, bench: Benchmark) -> RunResult:
+    """Re-score saved answers with the current scoring rules. No model calls."""
+    probes = {p.id: p for p in bench.probes()}
+    scores = [score(probes[s.probe_id], s.answer) for s in result.scores]
+    return RunResult(scores, result.leaks, {**result.manifest, "rescored": True})
 
 
 def apply_floor(scores: list[Score], floor: list[Score]) -> list[Score]:

@@ -106,7 +106,8 @@ def load(path: Path) -> Benchmark:
     try:
         users = [
             user_from_json(json.loads(line))
-            for line in (path / "users.jsonl").read_text(encoding="utf-8").splitlines()
+            # split on "\n" only: splitlines() also splits on U+2028, which JSON leaves raw
+            for line in (path / "users.jsonl").read_text(encoding="utf-8").split("\n")
             if line.strip()
         ]
     except (KeyError, TypeError, ValueError) as e:

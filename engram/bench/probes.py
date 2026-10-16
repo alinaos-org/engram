@@ -98,7 +98,7 @@ def make_probes(user: User, n_sessions: int, sleep_every: int, late_sleeps: int 
                         item.id,
                         gold=previous,
                         accept=[previous],
-                        reject=[item.value_at(ask) or ""],
+                        reject=[],  # naming the current value too is fine here
                         timing=timing,
                     )  # fmt: skip
                 )

@@ -1,0 +1,59 @@
+[
+  {
+    "sample_id": "conv-t1",
+    "conversation": {
+      "speaker_a": "Ana",
+      "speaker_b": "Ben",
+      "session_1_date_time": "1:56 pm on 8 May, 2023",
+      "session_1": [
+        {"speaker": "Ana", "dia_id": "D1:1", "text": "Hi Ben! I moved to Lisbon yesterday."},
+        {"speaker": "Ben", "dia_id": "D1:2", "text": "Wow, congrats! How is it so far?"},
+        {"speaker": "Ana", "dia_id": "D1:3", "text": "Lovely. Look at my new balcony.", "img_url": ["https://example.invalid/balcony.jpg"], "blip_caption": "a photo of a balcony with red flowers", "query": "balcony flowers"}
+      ],
+      "session_2_date_time": "10:37 am on 27 June, 2023",
+      "session_2": [
+        {"speaker": "Ben", "dia_id": "D2:1", "text": "I adopted a beagle called Rufus last week."},
+        {"speaker": "Ana", "dia_id": "D2:2", "text": "Rufus is a great name!"}
+      ],
+      "session_3_date_time": "7:15 pm on 3 July, 2023",
+      "session_3": [
+        {"speaker": "Ana", "dia_id": "D3:1", "text": "I went to the beach twice this week."},
+        {"speaker": "Ben", "dia_id": "D3:2", "text": "Rufus would love the beach."}
+      ],
+      "session_4_date_time": "9:00 am on 10 July, 2023"
+    },
+    "qa": [
+      {"question": "Which city did Ana move to?", "answer": "Lisbon", "evidence": ["D1:1"], "category": 4},
+      {"question": "When did Ana move to Lisbon?", "answer": "7 May 2023", "evidence": ["D1:1"], "category": 2},
+      {"question": "How many times did Ana go to the beach that week?", "answer": 2, "evidence": ["D3:1"], "category": 1},
+      {"question": "Would Ben enjoy a dog-friendly beach holiday?", "answer": "Likely yes, since he has a dog", "evidence": ["D2:1", "D3:2"], "category": 3},
+      {"question": "What is the name of Ana's beagle?", "adversarial_answer": "Rufus", "evidence": ["D2:1"], "category": 5}
+    ],
+    "event_summary": {},
+    "observation": {},
+    "session_summary": {}
+  },
+  {
+    "sample_id": "conv-t2",
+    "conversation": {
+      "speaker_a": "Cleo",
+      "speaker_b": "Dev",
+      "session_1_date_time": "8:00 pm on 1 March, 2023",
+      "session_1": [
+        {"speaker": "Cleo", "dia_id": "D1:1", "text": "I started learning the cello."},
+        {"speaker": "Dev", "dia_id": "D1:2", "text": "Nice, I play the trumpet."}
+      ],
+      "session_2_date_time": "8:30 pm on 15 March, 2023",
+      "session_2": [
+        {"speaker": "Dev", "dia_id": "D2:1", "text": "My band is called The Quiet Owls."}
+      ]
+    },
+    "qa": [
+      {"question": "What instrument does Dev play?", "answer": "trumpet", "evidence": ["D1:2"], "category": 4},
+      {"question": "What instrument does Cleo's band play?", "adversarial_answer": "trumpet", "evidence": ["D2:1"], "category": 5}
+    ],
+    "event_summary": {},
+    "observation": {},
+    "session_summary": {}
+  }
+]

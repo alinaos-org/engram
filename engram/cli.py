@@ -8,6 +8,13 @@
 Systems: b0 (no memory), b1 (full context), b2/b3 (retrieval; b2 = frontier model, b3 = base
 model), and the controls oracle (reads gold answers) and leaky (no ownership gating). With
 ``--mock null|parrot`` any system runs on CPU with no model, for testing the plumbing.
+
+Model specs for ``--model``:
+    claude:<model>   Claude via the Claude Code CLI on your subscription (claude:claude-opus-5-5)
+    codex:<model>    OpenAI via the Codex CLI on your ChatGPT subscription (codex:gpt-6.1-sol)
+    <name>           an OpenAI-compatible endpoint at --base-url (vLLM; APIs via --api-key-env)
+Responses are cached in ~/.cache/engram/responses.sqlite unless --no-cache, so interrupted runs
+resume where they stopped.
 """
 
 from __future__ import annotations
@@ -18,9 +25,11 @@ import sys
 from pathlib import Path
 
 from engram.bench import dataset
-from engram.bench.runner import apply_floor, load_run, report, run, save_run
+from engram.bench.runner import apply_floor, load_run, report, rescore, run, save_run
 from engram.bench.writer import LLMWriter, TemplateWriter
+from engram.models.cache import CachedModel
 from engram.models.chat import ChatModel, NullModel, OpenAIChat, ParrotModel
+from engram.models.subscription import ClaudeCLI, CodexCLI
 from engram.systems.baselines import (
     FullContext,
     LeakyRetrieval,
@@ -39,11 +48,19 @@ def _model(args, prefix: str = "") -> ChatModel:
     name = getattr(args, f"{prefix}model")
     if not name:
         sys.exit(f"--{prefix.replace('_', '-')}model or --{prefix.replace('_', '-')}mock required")
-    return OpenAIChat(
-        model=name,
-        base_url=getattr(args, f"{prefix}base_url"),
-        api_key_env=getattr(args, f"{prefix}api_key_env"),
-    )
+    effort = getattr(args, "effort", "low")
+    model: ChatModel
+    if name.startswith("claude:"):
+        model = ClaudeCLI(model=name.split(":", 1)[1], effort=effort)
+    elif name.startswith("codex:"):
+        model = CodexCLI(model=name.split(":", 1)[1], effort=effort)
+    else:
+        model = OpenAIChat(
+            model=name,
+            base_url=getattr(args, f"{prefix}base_url"),
+            api_key_env=getattr(args, f"{prefix}api_key_env"),
+        )
+    return model if getattr(args, "no_cache", False) else CachedModel(model)
 
 
 def cmd_generate(args) -> None:
@@ -65,17 +82,31 @@ def cmd_run(args) -> None:
         bench = dataclasses.replace(bench, users=bench.users[: args.limit_users])
     if args.system == "oracle":
         system = OracleMemory(bench)
+    elif args.system == "b4":
+        from engram.systems.lora import LoRAConfig, LoRAMemory
+
+        if not args.base_model:
+            sys.exit("--base-model is required for b4")
+        cfg = LoRAConfig(rank=args.lora_rank, epochs=args.lora_epochs, lr=args.lora_lr,
+                         mode=args.lora_mode)  # fmt: skip
+        system = LoRAMemory(args.base_model, cfg)
     else:
         model = _model(args)
         system = {
             "b0": lambda: NoMemory(model),
             "b1": lambda: FullContext(model, budget_chars=args.budget_chars),
-            "b2": lambda: RetrievalMemory(model, k=args.k, label="b2"),
-            "b3": lambda: RetrievalMemory(model, k=args.k, label="b3"),
-            "leaky": lambda: LeakyRetrieval(model, k=args.k),
+            "b2": lambda: RetrievalMemory(model, k=args.k, label="b2", retriever=args.retriever),
+            "b3": lambda: RetrievalMemory(model, k=args.k, label="b3", retriever=args.retriever),
+            "leaky": lambda: LeakyRetrieval(model, k=args.k, retriever=args.retriever),
         }[args.system]()
     result = run(
-        bench, system, leakage=not args.no_leakage, progress=print if args.verbose else None
+        bench,
+        system,
+        leakage=not args.no_leakage,
+        leak_targets_per_user=args.leak_targets,
+        workers=args.workers,
+        session_replies=not args.no_session_replies,
+        progress=(lambda m: print(m, flush=True)) if args.verbose else None,
     )
     out = save_run(result, Path(args.out))
     print(report(result.scores, result.leaks, f"{system.name} on {args.bench}"))
@@ -94,6 +125,59 @@ def cmd_report(args) -> None:
     print(report(scores, result.leaks, title))
 
 
+def cmd_import(args) -> None:
+    from engram.bench import external
+
+    loader = {"longmemeval": external.load_longmemeval, "locomo": external.load_locomo}
+    bench = loader[args.source](Path(args.path), limit=args.limit)
+    out = external.save(bench, Path(args.out))
+    counts = ", ".join(f"{k}={v}" for k, v in external.summarize(bench).items())
+    print(f"wrote {len(bench.users)} users to {out} ({counts}); "
+          f"{len(external.judge_ids(bench))} probes need the LLM judge")  # fmt: skip
+
+
+def cmd_judge(args) -> None:
+    """Re-grade free-form and ambiguous answers with an LLM judge; everything else stays as is."""
+    from concurrent.futures import ThreadPoolExecutor
+
+    from engram.bench import external
+    from engram.bench.judge import LLMJudge
+
+    bench_dir = Path(args.bench)
+    bench = (
+        external.load(bench_dir)
+        if (bench_dir / "external.json").exists()
+        else dataset.load(bench_dir)
+    )
+    flagged = external.judge_ids(bench)
+    probes = {p.id: p for p in bench.probes()}
+    result = load_run(Path(args.run))
+    judge = LLMJudge(_model(args))
+    todo = [
+        i for i, s in enumerate(result.scores)
+        if (s.probe_id in flagged or s.ambiguous) and probes[s.probe_id].gold is not None
+    ]  # fmt: skip
+
+    def grade(i: int) -> tuple[int, bool]:
+        s = result.scores[i]
+        p = probes[s.probe_id]
+        return i, judge.grade(p.question, p.gold or "", p.reject, s.answer)
+
+    with ThreadPoolExecutor(args.workers) as pool:
+        for i, verdict in pool.map(grade, todo):
+            result.scores[i] = dataclasses.replace(result.scores[i], correct=verdict)
+    result.manifest["judge"] = {"model": judge.model.name, "judged": len(todo)}
+    save_run(result, Path(args.out or args.run))
+    print(report(result.scores, result.leaks, f"{result.manifest.get('system_name')} (judged)"))
+
+
+def cmd_rescore(args) -> None:
+    bench = dataset.load(Path(args.bench))
+    result = rescore(load_run(Path(args.run)), bench)
+    save_run(result, Path(args.run))
+    print(report(result.scores, result.leaks, f"{result.manifest.get('system_name')} (rescored)"))
+
+
 def main(argv: list[str] | None = None) -> None:
     ap = argparse.ArgumentParser(prog="engram-bench", description=__doc__.split("\n\n")[0])
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -109,18 +193,41 @@ def main(argv: list[str] | None = None) -> None:
     g.add_argument("--writer-mock", choices=["null", "parrot"])
     g.add_argument("--writer-base-url", default="http://localhost:8000/v1")
     g.add_argument("--writer-api-key-env")
+    g.add_argument("--no-cache", action="store_true")
     g.set_defaults(func=cmd_generate)
 
     r = sub.add_parser("run", help="run a system through the benchmark")
     r.add_argument("--bench", required=True)
-    r.add_argument("--system", choices=["b0", "b1", "b2", "b3", "oracle", "leaky"], required=True)
+    r.add_argument(
+        "--system", choices=["b0", "b1", "b2", "b3", "b4", "oracle", "leaky"], required=True
+    )
     r.add_argument("--model")
     r.add_argument("--mock", choices=["null", "parrot"])
     r.add_argument("--base-url", default="http://localhost:8000/v1")
     r.add_argument("--api-key-env", help="name of the env var holding the API key")
     r.add_argument("--k", type=int, default=5, help="retrieval depth for b2/b3")
+    r.add_argument(
+        "--retriever",
+        choices=["bm25", "dense", "hybrid"],
+        default="bm25",
+        help="b2/b3 retriever; dense/hybrid need the ml extra (use hybrid for reported numbers)",
+    )
     r.add_argument("--budget-chars", type=int, default=400_000, help="b1 context budget")
     r.add_argument("--limit-users", type=int)
+    r.add_argument("--workers", type=int, default=1, help="users run in parallel")
+    r.add_argument(
+        "--no-session-replies",
+        action="store_true",
+        help="log session turns without generating replies (valid for all baselines)",
+    )
+    r.add_argument("--leak-targets", type=int, default=3, help="other users probed per user")
+    r.add_argument("--base-model", help="b4: Hugging Face id of the frozen base model")
+    r.add_argument("--lora-rank", type=int, default=16)
+    r.add_argument("--lora-epochs", type=int, default=3)
+    r.add_argument("--lora-lr", type=float, default=2e-4)
+    r.add_argument("--lora-mode", choices=["cumulative", "incremental"], default="cumulative")
+    r.add_argument("--effort", default="low", help="reasoning effort for claude:/codex: models")
+    r.add_argument("--no-cache", action="store_true")
     r.add_argument("--no-leakage", action="store_true")
     r.add_argument("--out", required=True)
     r.add_argument("-v", "--verbose", action="store_true")
@@ -130,6 +237,30 @@ def main(argv: list[str] | None = None) -> None:
     p.add_argument("run")
     p.add_argument("--floor", help="a B0 run directory; drops probes B0 already answers")
     p.set_defaults(func=cmd_report)
+
+    im = sub.add_parser("import", help="convert LongMemEval or LoCoMo into engram-bench format")
+    im.add_argument("source", choices=["longmemeval", "locomo"])
+    im.add_argument("path", help="the downloaded JSON file")
+    im.add_argument("--out", required=True)
+    im.add_argument("--limit", type=int, help="convert only the first N instances")
+    im.set_defaults(func=cmd_import)
+
+    j = sub.add_parser("judge", help="grade free-form/ambiguous answers with an LLM judge")
+    j.add_argument("run")
+    j.add_argument("--bench", required=True)
+    j.add_argument("--model", required=True, help="judge model spec, e.g. claude:claude-opus-5-5")
+    j.add_argument("--mock", choices=["null", "parrot"])
+    j.add_argument("--base-url", default="http://localhost:8000/v1")
+    j.add_argument("--api-key-env")
+    j.add_argument("--effort", default="low")
+    j.add_argument("--workers", type=int, default=4)
+    j.add_argument("--out", help="write the judged run here instead of in place")
+    j.set_defaults(func=cmd_judge)
+
+    rs = sub.add_parser("rescore", help="re-score a saved run's answers with current rules")
+    rs.add_argument("run")
+    rs.add_argument("--bench", required=True)
+    rs.set_defaults(func=cmd_rescore)
 
     args = ap.parse_args(argv)
     args.func(args)

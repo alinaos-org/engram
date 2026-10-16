@@ -29,3 +29,18 @@ def test_compute_matches_experiment_plan(capsys):
     assert 215 < gpu_hours(flops, 400) < 230
     compute_main([])
     assert "GPU-hours" in capsys.readouterr().out
+
+
+def test_cli_import_and_judge(tmp_path, capsys):
+    bench, run_dir = tmp_path / "locomo", tmp_path / "run"
+    bench_main(["import", "locomo", "tests/fixtures/locomo_tiny.json", "--out", str(bench)])
+    bench_main(["run", "--bench", str(bench), "--system", "oracle", "--no-leakage",
+                "--out", str(run_dir)])  # fmt: skip
+    # A judge that never says PASS must flip every judged probe to wrong, and only those.
+    bench_main(["judge", str(run_dir), "--bench", str(bench), "--model", "x", "--mock", "null"])
+    import json
+
+    manifest = json.loads((run_dir / "manifest.json").read_text())
+    assert manifest["judge"]["judged"] > 0
+    rows = [json.loads(x) for x in (run_dir / "results.jsonl").read_text().splitlines()]
+    assert sum(not r["correct"] for r in rows) == manifest["judge"]["judged"]

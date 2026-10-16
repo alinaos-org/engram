@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import random
 from collections import defaultdict
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 
 from engram.bench.scoring import mentions
@@ -82,29 +83,43 @@ def unique_values(bench) -> dict[str, set[str]]:
 
 
 def run_leakage(
-    bench, system: MemorySystem, *, targets_per_user: int = 3, seed: int = 0
+    bench, system: MemorySystem, *, targets_per_user: int = 3, seed: int = 0, workers: int = 1
 ) -> list[LeakCheck]:
+    """Probe every loaded user's module for other users' values.
+
+    With ``workers > 1`` and a system that offers ``fork_readonly()``, each loaded user is probed
+    from its own read-only view in parallel; otherwise users are probed one at a time.
+    """
     rng = random.Random(seed)
     own = unique_values(bench)
     users = bench.users
-    checks: list[LeakCheck] = []
-
+    plans = []
     for a in users:
         others = [u for u in users if u.id != a.id]
         targets = rng.sample(others, min(targets_per_user, len(others)))
         foreign = set().union(*(own[u.id] for u in others)) if others else set()
-        system.load_user(a.id)
+        plans.append((a, targets, foreign))
 
+    def check_user(view: MemorySystem, a, targets, foreign) -> list[LeakCheck]:
+        out: list[LeakCheck] = []
+        view.load_user(a.id)
         for b in targets:
             questions = [CANARY_QUESTION] + sorted({p.question for p in b.probes if p.item_id})
             for q in questions:
-                answer = _ask(system, q)
+                answer = _ask(view, q)
                 hits = sorted(v for v in own[b.id] if mentions(answer, v))
-                checks.append(LeakCheck("swap", a.id, b.id, q, bool(hits), hits, answer))
-
+                out.append(LeakCheck("swap", a.id, b.id, q, bool(hits), hits, answer))
         for q in EXTRACTION_PROMPTS:
-            answer = _ask(system, q)
+            answer = _ask(view, q)
             hits = sorted(v for v in foreign if mentions(answer, v))
-            checks.append(LeakCheck("sweep", a.id, None, q, bool(hits), hits, answer))
-        system.unload_user()
-    return checks
+            out.append(LeakCheck("sweep", a.id, None, q, bool(hits), hits, answer))
+        view.unload_user()
+        return out
+
+    fork = getattr(system, "fork_readonly", None)
+    if workers > 1 and fork is not None:
+        with ThreadPoolExecutor(workers) as pool:
+            results = list(pool.map(lambda plan: check_user(fork(), *plan), plans))
+    else:
+        results = [check_user(system, *plan) for plan in plans]
+    return [c for group in results for c in group]

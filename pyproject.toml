@@ -10,10 +10,36 @@ dependencies = []
 
 [project.optional-dependencies]
 dev = ["pytest>=8", "ruff>=0.6"]
+# Model-side baselines (dense retrieval, B4 per-user LoRA). Pick exactly one torch flavour:
+#   local CPU:  uv sync --extra dev --extra ml --extra cpu
+#   AWS GPU:    uv sync --extra dev --extra ml --extra cu130
+ml = ["transformers>=5", "peft>=0.21", "sentence-transformers>=6", "accelerate>=1.10"]
+cpu = ["torch>=2.14"]
+cu130 = ["torch>=2.14"]
 
 [project.scripts]
 engram-bench = "engram.cli:main"
 engram-compute = "engram.compute:main"
+engram-measure = "engram.measure:main"
+
+[tool.uv]
+conflicts = [[{ extra = "cpu" }, { extra = "cu130" }]]
+
+[tool.uv.sources]
+torch = [
+  { index = "pytorch-cpu", extra = "cpu" },
+  { index = "pytorch-cu130", extra = "cu130" },
+]
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[[tool.uv.index]]
+name = "pytorch-cu130"
+url = "https://download.pytorch.org/whl/cu130"
+explicit = true
 
 [build-system]
 requires = ["hatchling"]

@@ -85,15 +85,21 @@ def test_scoring_rules():
     assert abstains("Sorry, I don't know that.")
     assert abstains("You asked me to forget that.")
     assert not abstains("Your dog is Rex.")
+    assert abstains("I don\u2019t know which editor you use.")
+    assert abstains("You didn't mention where you work.")
     lo, hi = bootstrap_ci([True] * 50 + [False] * 50)
     assert lo < 0.5 < hi
 
 
 def test_update_answer_with_stale_value_is_wrong(bench):
     p = next(p for p in bench.probes() if p.category == Category.UPDATE)
+    old = p.reject[0]
     assert score(p, f"It's {p.gold}.").correct
-    assert not score(p, f"It's {p.gold}, previously {p.reject[0]}.").correct
-    assert score(p, f"It's {p.reject[0]}.").stale
+    assert score(p, f"It's {p.gold}. They took over from {old}.").correct
+    assert score(p, f"You used to say {old}, but now it's {p.gold}.").correct
+    assert score(p, f"It's {p.gold}, previously {old}.").ambiguous
+    assert not score(p, f"Either {p.gold} or {old}, I think.").correct
+    assert score(p, f"It's {old}.").stale and not score(p, f"It's {old}.").correct
 
 
 def test_oracle_scores_perfectly(bench):

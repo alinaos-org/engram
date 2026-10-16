@@ -101,14 +101,24 @@ uv run engram-bench run --bench data/bench-v0 --system oracle --out runs/oracle
 uv run engram-bench run --bench data/bench-v0 --system b3 --mock parrot --out runs/b3-parrot
 ```
 
-To test a real model, serve it behind any OpenAI-compatible endpoint (for example vLLM) and pass `--model NAME --base-url URL`. For hosted APIs, add `--api-key-env VAR`; the key is read from that environment variable and is never written to run manifests.
+Real models plug in with `--model`:
+
+| Spec | What it runs |
+|---|---|
+| `claude:claude-opus-5-5` | Claude through the Claude Code CLI, on a Claude subscription |
+| `codex:gpt-6.1-sol` | OpenAI through the Codex CLI, on a ChatGPT subscription |
+| `Qwen/Qwen3-8B` + `--base-url URL` | any OpenAI-compatible endpoint, such as vLLM; hosted APIs via `--api-key-env VAR` |
+
+Responses are cached in `~/.cache/engram/responses.sqlite`, so interrupted runs resume. The subscription runs isolate the CLIs from your own memories, AGENTS.md and MCP servers; see [`engram/models/subscription.py`](engram/models/subscription.py) for what still reaches the model.
 
 ```bash
-uv run engram-bench run --bench data/bench-v0 --system b3 --model qwen3-8b --base-url http://localhost:8000/v1 --out runs/b3-qwen3-8b
-uv run engram-bench report runs/b3-qwen3-8b --floor runs/b0-qwen3-8b
+uv run engram-bench run --bench data/bench-v0 --system b2 --model claude:claude-opus-5-5 --retriever hybrid --no-session-replies --workers 4 --out runs/b2-claude
+uv run engram-bench report runs/b2-claude --floor runs/b0-claude
 ```
 
-`engram-compute` reproduces the compute assumptions in the experiment plan, so you can change them and re-run.
+Dense or hybrid retrieval and the per-user LoRA baseline (`--system b4`) need the `ml` extra: `uv sync --extra dev --extra ml --extra cpu` locally, or `--extra cu130` on a GPU. On NixOS, first run `source scripts/nixos-ml-env.sh`. Public benchmarks are imported with `scripts/fetch-datasets.sh` (LongMemEval, LoCoMo), and `engram-bench judge` grades their free-form answers. GPU runs on AWS follow [docs/aws-gpu.md](docs/aws-gpu.md).
+
+`engram-compute` reproduces the compute assumptions in the experiment plan, so you can change them and re-run; `engram-measure` replaces them with measurements on real hardware.
 
 ## Contributing
 

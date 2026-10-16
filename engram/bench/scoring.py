@@ -24,6 +24,11 @@ ABSTAIN_PATTERNS = [
     r"\bi (?:can't|cannot|can not) (?:recall|remember|say)\b",
     r"\bi'm not aware\b",
     r"\bnot something (?:i|you)",
+    r"\b(?:you )?(?:didn't|did not|never) (?:mention|tell|say|share)",
+    r"\bnot enough information\b",
+    r"\binformation (?:provided |given )?is not enough\b",
+    r"\bnothing (?:saved|stored|on file|recorded)\b",
+    r"\bi have no (?:record|information|details|memory)\b",
 ]
 _ABSTAIN_RE = re.compile("|".join(ABSTAIN_PATTERNS), re.I)
 
@@ -44,7 +49,37 @@ def mentions(answer: str, value: str) -> bool:
 
 
 def abstains(answer: str) -> bool:
-    return bool(_ABSTAIN_RE.search(answer))
+    text = answer.replace("\u2019", "'").replace("\u2018", "'")  # curly apostrophes
+    return bool(_ABSTAIN_RE.search(text))
+
+
+# Words that frame a mentioned value as history rather than as the current answer.
+_PAST_CUE = re.compile(
+    r"\b(used to|previously|formerly|before|earlier|originally|no longer|not any more|"
+    r"anymore|instead of|rather than|replac\w*|took over from|switched from|moved from|"
+    r"changed from|renamed from|left|was|were|old|ex-?\w*|from)\b",
+    re.I,
+)
+_CUE_WINDOW = 40  # characters either side of the stale value
+
+
+def asserts(answer: str, value: str) -> bool:
+    """True if ``value`` is mentioned and at least one mention is *not* framed as the past.
+
+    "Your manager is Lomor; they took over from Lois" mentions Lois only as history, so it does
+    not assert Lois. A heuristic: answers that mention both the gold and a stale value are also
+    flagged ``ambiguous`` so a judge (or a human) can audit them.
+    """
+    if not mentions(answer, value):
+        return False
+    a, v = normalize(answer), normalize(value)
+    start = 0
+    while (i := a.find(v, start)) != -1:
+        window = a[max(0, i - _CUE_WINDOW) : i] + " " + a[i + len(v) : i + len(v) + _CUE_WINDOW]
+        if not _PAST_CUE.search(window):
+            return True
+        start = i + len(v)
+    return False
 
 
 @dataclass
@@ -54,24 +89,37 @@ class Score:
     category: str
     timing: str
     correct: bool
-    stale: bool  # mentioned an outdated or forgotten value
+    stale: bool  # asserted an outdated or forgotten value (for forget/incognito: revealed it)
     abstained: bool
     answer: str
+    ambiguous: bool = False  # mentioned both the gold and a stale value; worth auditing
 
 
 def score(probe: Probe, answer: str) -> Score:
     abst = abstains(answer)
-    stale = any(mentions(answer, r) for r in probe.reject if r)
+    rejects = [r for r in probe.reject if r]
     if probe.gold is None:
         # Never-given, forgotten or incognito: the system must decline and must not reveal the
-        # value. ``stale`` alone (revealed a forgotten value) is reported as the leak rate.
+        # value at all, even framed as history. ``stale`` is reported as the leak rate.
+        stale = any(mentions(answer, r) for r in rejects)
         correct = abst and not stale
+        ambiguous = False
     else:
         hit = any(mentions(answer, a) for a in probe.accept)
+        stale = any(asserts(answer, r) for r in rejects)
+        ambiguous = hit and any(mentions(answer, r) for r in rejects)
         # FAMA-style: an answer that also asserts a stale value is wrong, not half-right.
         correct = hit and not stale
     return Score(
-        probe.id, probe.user_id, probe.category.value, probe.timing, correct, stale, abst, answer
+        probe.id,
+        probe.user_id,
+        probe.category.value,
+        probe.timing,
+        correct,
+        stale,
+        abst,
+        answer,
+        ambiguous,
     )
 
 

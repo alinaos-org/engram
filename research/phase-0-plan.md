@@ -59,7 +59,7 @@ If G2 fails because frontier + RAG already saturates the benchmark, we make the 
 Module swap, canary sweep, retrieval-log ownership gating, and storage audit after forget requests. Validate it against a **deliberately leaky** control system, so we know the harness can fail something. Membership inference against adapters arrives with B4.
 
 ### E. Phase 1 groundwork (weeks 2–6, in parallel) — #5, #6, #7, #9, #10, #12
-- **#5 Base model.** Shortlist dense 7–8B candidates already used in the retrofit literature (for example Llama-3.1-8B, Qwen3-8B, Mistral-7B-v0.3) plus one hybrid (for example Nemotron-H 8B). Score them on licence, tooling and B3/B4 results. Pick one primary and one fallback.
+- **#5 Base model.** Shortlist dense 7–8B candidates already used in the retrofit literature (for example Llama-3.1-8B, Qwen3-8B, Mistral-7B-v0.3) plus one hybrid (Qwen3.5-9B; Nemotron-H-8B's licence is research-only). Score them on licence, tooling and B3/B4 results. Pick one primary and one fallback.
 - **#6 Fast memory.** Read the full Titan-Llama, In-Place TTT and TTT-NTP papers. Write a design note. Reproduce one result at ≤1B scale, using released code where it exists and reimplementing otherwise.
 - **#7 Container.** Estimate what it costs to retrofit memory layers at 8B, and run the slot-versus-LoRA forgetting curve at 0.5–1B first.
 - **#9 Threat model.** Write the threat model, the key-custody design, and a list of every shared component with the data it may train on.
@@ -92,12 +92,32 @@ Module swap, canary sweep, retrieval-log ownership gating, and storage audit aft
 | Frontier API for B2 and the LLM judge | $0.5–2K |
 | **Total at $2–3 per GPU-hour** | **~$0.7–3K** |
 
-## Decisions needed from Matt
+## Decisions
 
-1. **Compute:** which provider, and what spending cap for Phase 0?
-2. **Frontier baseline (B2) and judge model:** which model(s), and is an API budget approved?
-3. **Session generator:** must differ in model family from the base. If generated sessions will later be used to train Engram (Phase 2), it should be an open-weights model, so that no provider's terms restrict training on its outputs.
+**Made (2026-10-15):**
+1. **Compute: AWS** (account 794285265674, us-west-2). The runbook is in [docs/aws-gpu.md](../docs/aws-gpu.md).
+2. **Frontier models: Matt's Claude and ChatGPT subscriptions**, through the Claude Code and Codex CLIs, so there is no API spend. B2 and the LLM judge use `claude:claude-opus-5-5` and `codex:gpt-6.1-sol`. Caveats to state in every report:
+   - Codex answers inside its own agent instructions.
+   - Claude's CLI adds a one-line account note to the context.
+   - Both run isolated from the user's own memories, AGENTS.md and MCP servers.
+   - Rate limits are shared with Matt's interactive use, so runs use about 4 parallel workers.
+
+**Still open:**
+1. **GPU quota.** Every EC2 GPU quota on the account is 0. Requesting 16 vCPUs for G/VT on-demand and spot is free but changes the account. See the runbook.
+2. **Support stack and budget.** Deploy `infra/aws/engram-gpu.yaml` (bucket, SSM-only instance role, no-ingress security group, $300 per month budget alerts) and choose the alert email.
+3. **Session generator:** it must differ in model family from the base. If generated sessions will later train Engram (Phase 2), it should be open-weights. Candidate: a non-Qwen open model served on the GPU day.
 4. **Name:** keep "Engram" despite DeepSeek's architecture of the same name, or rename now while it is cheap.
+
+## Status (2026-10-15)
+
+| Gate | State |
+|---|---|
+| G1 benchmark v0 | Generator, probes, scorers and floor done. LongMemEval-S/oracle and LoCoMo convert, and an LLM judge grades free-form answers. Sessions are short (template writer): still to do are long LLM-written sessions that exceed the context window |
+| G2 discrimination | Frontier pilot on subscriptions (10 users; B0, B1, B2 with hybrid retrieval) is in `runs/pilot`. Base-model B0, B1, B3 wait on the GPU day |
+| G3 leakage harness | Done. It catches the leaky control and shows 0 false positives on gated systems |
+| G4 base model | Recommendation: **Qwen3-8B** primary, Llama-3.1-8B-Instruct fallback ([shortlist](base-model-shortlist.md)). The hybrid comparator changes from Nemotron-H-8B (research-only licence) to **Qwen3.5-9B**. Final once B3/B4 run |
+| G8 compute | `engram-measure` (serving throughput, sleep cost) is ready to run on the GPU day |
+| B4 | Per-user LoRA baseline implemented and tested on CPU; real runs on the GPU day |
 
 ## Risks
 
