@@ -32,18 +32,18 @@ Recent work on **test-time training**, **neural memory modules** and **consolida
 
 ```mermaid
 flowchart TB
-    S(["Session<br/><i>context wiped afterwards</i>"]) --> B
+    S(["Session<br/><i>context wiped afterwards</i>"])
     B["<b>Frozen base model</b><br/>open weights · 8–32B · never trained on users"]
+    S --> B
 
     subgraph M["Per-user memory module · encrypted · detachable"]
-        direction LR
         F["<b>Fast memory</b><br/>neural module written at inference<br/><i>surprise-gated writes</i>"]
         A["<b>Slow memory</b><br/>per-user LoRA adapter"]
         R[("<b>Retrieval log</b><br/>exact facts · provenance · audit")]
-        F -- "sleep consolidation<br/>(offline, periodic)" --> A
     end
 
     B <-- "read / write" --> F
+    F -- "sleep consolidation<br/>(offline, periodic)" --> A
     A -. "adapts" .-> B
     B <-. "exact lookups" .-> R
 ```
