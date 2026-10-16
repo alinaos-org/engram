@@ -1,0 +1,76 @@
+{
+  "name": "phase1-corpus-v0",
+  "description": "v0 mix from research/phase1-corpus.md section (a): 10B Qwen3 tokens, no repeats. Shares are assumptions for the Phase 1 ablations. Revisions are the commit shas each dataset resolved to on 2026-10-15 (fetch records them in fetch_manifest.json). The pg19 revision is that of the emozilla/pg19 parquet copy, which fetch streams because deepmind/pg19 is a loading script.",
+  "seed": 0,
+  "target_tokens": 10000000000,
+  "tokenizer": "hf:Qwen/Qwen3-8B",
+  "sources": [
+    {"key": "pg19", "out_name": "pg19-validation", "split": "validation", "force_split": "val", "revision": "c021754c8e01c5b1cc83a1f549c1f97fbbb756b8"},
+    {"key": "pg19", "out_name": "pg19-test", "split": "test", "force_split": "test", "revision": "c021754c8e01c5b1cc83a1f549c1f97fbbb756b8"},
+    {"key": "gutenberg", "slice": "A", "share": 0.25, "revision": "3cdf6879c807f4e4e063f2ceb23bc268d8c29ab7"},
+    {"key": "pre1929", "slice": "A", "share": 0.10, "revision": "23f9d96dbb1db3324bbc9fbfe1f8299cc799c4d1"},
+    {"key": "arxiv", "slice": "B", "share": 0.10, "revision": "033cf7f53f9b348deec868c1a5a48484f3ee9e52"},
+    {"key": "pes2o", "slice": "B", "share": 0.10, "revision": "2caeba1585aaafa3c965410d80af85b09ed11cd9"},
+    {"key": "wikipedia", "slice": "C", "share": 0.10, "revision": "b04c8d1ceb2f5cd4588862100d08de323dccfbaa"},
+    {"key": "engram_bios", "slice": "D", "share": 0.15},
+    {"key": "conv_chronicles", "slice": "E", "tokens": null, "revision": "9639b3552594a612ceafa76238a34f0f6eeaa207"},
+    {"key": "engram_threads", "slice": "E", "share": 0.12, "use": false, "generated": true,
+     "notes": "Engram-generated multi-session threads (~1.2B); needs the session generator (not implemented)"},
+    {"key": "engram_restatements", "slice": "F", "share": 0.05, "use": false, "generated": true,
+     "notes": "EntiGraph-style restatements of A/B chunks (vLLM); not implemented"},
+    {"key": "entigraph_quality", "slice": "F", "use": false,
+     "notes": "optional; only if QuALITY per-article licences check out"}
+  ],
+  "filter": {
+    "min_chunks": 3,
+    "min_english_score": 0.08,
+    "min_ocr_score": 0.8,
+    "licence_allowlist": ["PD", "CC0", "CC-BY", "CC-BY-SA", "GFDL"],
+    "arxiv_denylist": ["2410.10813", "2402.17753", "2502.09597", "2507.05257", "2510.27246", "2504.14225"],
+    "dedup_threshold": 0.8
+  },
+  "chunk": {
+    "sizes": [1024, 2048, 4096],
+    "tolerance": 0.1,
+    "session_max": 4096,
+    "val": 0.01,
+    "test": 0.01
+  },
+  "bios": {
+    "docs": null,
+    "people_per_doc": 40,
+    "p_update": 0.3,
+    "p_extra": 0.5
+  },
+  "decontam": {
+    "n": 13,
+    "bench": {"users": 50, "sessions": 30, "seed": 0},
+    "bench_dirs": ["data/bench-pilot", "data/bench-smoke"],
+    "external": [
+      "data/external/longmemeval_oracle.json",
+      "data/external/longmemeval_s_cleaned.json",
+      "data/external/longmemeval_m_cleaned.json",
+      "data/external/locomo10.json",
+      "data/external/prefeval"
+    ],
+    "background_max_df": 0.001,
+    "background_min_docs": 1000,
+    "probe_jaccard": 0.8
+  },
+  "probes": {
+    "generator": {"model": "mistralai/Mistral-Small-3.2-24B-Instruct-2506", "revision": null, "base_url": null},
+    "verifier": {"model": "allenai/Olmo-3.1-32B-Instruct", "revision": null, "base_url": null},
+    "closed_book": {"model": "Qwen/Qwen3-8B-Base", "revision": null, "base_url": null},
+    "bench_session_writer": null,
+    "items_per_chunk": [3, 5],
+    "splits": ["train", "val", "test"]
+  },
+  "episodes": {
+    "k_max": 128,
+    "max_context": 131072,
+    "p_mixed": 0.2,
+    "mixed_docs": [2, 4],
+    "max_probes": 16
+  },
+  "pack": {"shard_size": 1000}
+}

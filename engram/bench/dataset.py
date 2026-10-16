@@ -29,6 +29,7 @@ class BenchConfig:
     late_sleeps: int = 3
     items_per_user: int = 10
     abstain_per_user: int = 3
+    application_probes: bool = False  # v1: preference-application probes (changes the hash)
 
 
 @dataclass
@@ -73,7 +74,10 @@ def generate(config: BenchConfig, writer: TemplateWriter | None = None) -> Bench
             abstain_slots=plan.abstain_slots,
         )
         user.sessions = writer.write(user, plan, rng)
-        user.probes = make_probes(user, config.sessions, config.sleep_every, config.late_sleeps)
+        user.probes = make_probes(
+            user, config.sessions, config.sleep_every, config.late_sleeps,
+            application=config.application_probes,
+        )  # fmt: skip
         users.append(user)
     return Benchmark(config, users, writer.name)
 

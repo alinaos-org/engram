@@ -42,7 +42,7 @@ class _Session:
     def unload_user(self) -> None:
         self.user = None
 
-    def start_session(self, *, write: bool = True) -> None:
+    def start_session(self, *, write: bool = True, day: int | None = None) -> None:
         self.context = []
         self.write = write
 
@@ -246,7 +246,7 @@ class OracleMemory:
     def unload_user(self) -> None:
         self.user = None
 
-    def start_session(self, *, write: bool = True) -> None:
+    def start_session(self, *, write: bool = True, day: int | None = None) -> None:
         pass
 
     def observe(self, message: str) -> None:

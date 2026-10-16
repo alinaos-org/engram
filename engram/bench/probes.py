@@ -61,7 +61,41 @@ def _probe_for(
     )  # fmt: skip
 
 
-def make_probes(user: User, n_sessions: int, sleep_every: int, late_sleeps: int = 3) -> list[Probe]:
+# Preference-application probes: the question never mentions the preference, but a model that
+# remembers it should apply it. Scored automatically by the words the answer uses.
+UNIT_WORDS = {
+    "metric": ["cm", "centimeters", "centimetres", "meters", "metres", "millimeters", "mm"],
+    "imperial": ["feet", "foot", "ft", "inches", "inch"],
+}
+APPLICATION = {
+    "code_language": (
+        "Show me a tiny example program that reads a text file line by line.",
+        lambda value: [f"lang:{value}"],  # scored by the code fence's language tag
+    ),
+    "units": (
+        "Roughly how tall is a standard interior door?",
+        lambda value: [*UNIT_WORDS.get(value, []), value],
+    ),
+}
+
+
+def _application_probe(item: MemoryItem, ask: int, phase: Phase, timing: str, pid: str) -> Probe:
+    question, words = APPLICATION[item.slot]
+    value = item.value_at(ask) or ""
+    stale = [w for v in item.values_before(ask) if v != value for w in words(v)]
+    return Probe(
+        pid, item.user_id, Category.APPLICATION, question, ask, phase, item.id,
+        gold=value, accept=words(value), reject=stale, timing=timing,
+    )  # fmt: skip
+
+
+def make_probes(
+    user: User,
+    n_sessions: int,
+    sleep_every: int,
+    late_sleeps: int = 3,
+    application: bool = False,
+) -> list[Probe]:
     sleeps = sleep_sessions(n_sessions, sleep_every)
     probes: list[Probe] = []
     seen: set[tuple[str, int, Phase]] = set()
@@ -102,6 +136,18 @@ def make_probes(user: User, n_sessions: int, sleep_every: int, late_sleeps: int 
                         timing=timing,
                     )  # fmt: skip
                 )
+
+    # Application: after each change the user still holds (not forgotten, not incognito-only).
+    if application:
+        for item in user.items:
+            if item.slot not in APPLICATION or item.incognito_only:
+                continue
+            for change in item.timeline:
+                points = timing_points(change.session, sleeps, late_sleeps)
+                timing, ask, phase = points[1] if len(points) > 1 else points[0]
+                if item.value_at(ask) is not None:
+                    pid = f"{user.id}-p{len(probes)}"
+                    probes.append(_application_probe(item, ask, phase, timing, pid))
 
     # Abstention: slots the user never mentioned, asked mid-way and at the end.
     asked_slots = {i.slot for i in user.items}

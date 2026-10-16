@@ -1,0 +1,15 @@
+[
+ {
+  "question_id": "fx1",
+  "question": "What colour was the boat my uncle repainted last spring?",
+  "answer": "Teal",
+  "haystack_sessions": [
+   [
+    {
+     "role": "user",
+     "content": "Last spring my uncle spent every weekend scraping the old varnish off his little wooden rowing boat before repainting the whole hull a deep shade of teal."
+    }
+   ]
+  ]
+ }
+]

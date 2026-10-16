@@ -26,7 +26,7 @@ from pathlib import Path
 
 from engram.bench import dataset
 from engram.bench.runner import apply_floor, load_run, report, rescore, run, save_run
-from engram.bench.writer import LLMWriter, TemplateWriter
+from engram.bench.writer import LLMWriter, LongWriter, TemplateWriter
 from engram.models.cache import CachedModel
 from engram.models.chat import ChatModel, NullModel, OpenAIChat, ParrotModel
 from engram.models.subscription import ClaudeCLI, CodexCLI
@@ -65,15 +65,26 @@ def _model(args, prefix: str = "") -> ChatModel:
 
 def cmd_generate(args) -> None:
     config = dataset.BenchConfig(
-        users=args.users, sessions=args.sessions, seed=args.seed, sleep_every=args.sleep_every
+        users=args.users,
+        sessions=args.sessions,
+        seed=args.seed,
+        sleep_every=args.sleep_every,
+        application_probes=args.application_probes,
     )
-    writer = TemplateWriter() if args.writer == "template" else LLMWriter(_model(args, "writer_"))
+    if args.writer == "template":
+        writer = TemplateWriter()
+    elif args.writer == "long":
+        writer = LongWriter(_model(args, "writer_"), workers=args.writer_workers)
+    else:
+        writer = LLMWriter(_model(args, "writer_"))
     bench = dataset.generate(config, writer)
     out = dataset.save(bench, Path(args.out))
     n = sum(len(u.probes) for u in bench.users)
     print(f"wrote {len(bench.users)} users, {n} probes to {out} (writer: {bench.writer})")
-    if isinstance(writer, LLMWriter):
+    if isinstance(writer, LLMWriter | LongWriter):
         print(f"LLM rewrites that fell back to templates: {writer.fallbacks}")
+    if isinstance(writer, LongWriter):
+        print(f"sessions the model failed to write (filler used): {writer.failed_sessions}")
 
 
 def cmd_run(args) -> None:
@@ -82,6 +93,10 @@ def cmd_run(args) -> None:
         bench = dataclasses.replace(bench, users=bench.users[: args.limit_users])
     if args.system == "oracle":
         system = OracleMemory(bench)
+    elif args.system == "b5":
+        from engram.systems.mem0_memory import Mem0Memory
+
+        system = Mem0Memory(_model(args), k=args.k)
     elif args.system == "b4":
         from engram.systems.lora import LoRAConfig, LoRAMemory
 
@@ -99,16 +114,49 @@ def cmd_run(args) -> None:
             "b3": lambda: RetrievalMemory(model, k=args.k, label="b3", retriever=args.retriever),
             "leaky": lambda: LeakyRetrieval(model, k=args.k, retriever=args.retriever),
         }[args.system]()
-    result = run(
-        bench,
-        system,
-        leakage=not args.no_leakage,
-        leak_targets_per_user=args.leak_targets,
-        workers=args.workers,
-        session_replies=not args.no_session_replies,
-        progress=(lambda m: print(m, flush=True)) if args.verbose else None,
-    )
+    membership = None
+    if args.membership:
+        # Membership inference reads the adapters, and the leakage pass deletes users, so run the
+        # protocol without leakage, attack the adapters, then run the leakage pass.
+        if not hasattr(system, "sequence_losses"):
+            sys.exit("--membership needs a system with per-user adapters (b4)")
+        from engram.bench.leakage import run_leakage
+        from engram.bench.membership import evaluate, format_report
+
+        result = run(
+            bench, system, leakage=False, workers=args.workers,
+            session_replies=not args.no_session_replies,
+            progress=(lambda m: print(m, flush=True)) if args.verbose else None,
+        )  # fmt: skip
+        membership = evaluate(system, bench)
+        print(format_report(membership))
+        if not args.no_leakage:
+            result.leaks = run_leakage(bench, system, targets_per_user=args.leak_targets)
+            result.manifest["n_leak_checks"] = len(result.leaks)
+    else:
+        result = run(
+            bench,
+            system,
+            leakage=not args.no_leakage,
+            leak_targets_per_user=args.leak_targets,
+            workers=args.workers,
+            session_replies=not args.no_session_replies,
+            progress=(lambda m: print(m, flush=True)) if args.verbose else None,
+        )
     out = save_run(result, Path(args.out))
+    if membership is not None:
+        import json as _json
+
+        from engram.bench.membership import format_report as _fmt
+
+        summary = {
+            "report": _fmt(membership, per_user=False),
+            "pooled": {
+                g: dataclasses.asdict(v) if dataclasses.is_dataclass(v) else v
+                for g, v in getattr(membership, "pooled", {}).items()
+            },
+        }
+        (out / "membership.json").write_text(_json.dumps(summary, indent=2, default=str) + "\n")
     print(report(result.scores, result.leaks, f"{system.name} on {args.bench}"))
     print(f"\nsaved to {out}")
 
@@ -265,7 +313,11 @@ def main(argv: list[str] | None = None) -> None:
     g.add_argument("--sessions", type=int, default=30)
     g.add_argument("--seed", type=int, default=0)
     g.add_argument("--sleep-every", type=int, default=3)
-    g.add_argument("--writer", choices=["template", "llm"], default="template")
+    g.add_argument("--writer", choices=["template", "llm", "long"], default="template")
+    g.add_argument("--writer-workers", type=int, default=4, help="long writer: parallel sessions")
+    g.add_argument(
+        "--application-probes", action="store_true", help="v1 preference-application probes"
+    )
     g.add_argument("--writer-model")
     g.add_argument("--writer-mock", choices=["null", "parrot"])
     g.add_argument("--writer-base-url", default="http://localhost:8000/v1")
@@ -276,7 +328,7 @@ def main(argv: list[str] | None = None) -> None:
     r = sub.add_parser("run", help="run a system through the benchmark")
     r.add_argument("--bench", required=True)
     r.add_argument(
-        "--system", choices=["b0", "b1", "b2", "b3", "b4", "oracle", "leaky"], required=True
+        "--system", choices=["b0", "b1", "b2", "b3", "b4", "b5", "oracle", "leaky"], required=True
     )
     r.add_argument("--model")
     r.add_argument("--mock", choices=["null", "parrot"])
@@ -299,6 +351,11 @@ def main(argv: list[str] | None = None) -> None:
     )
     r.add_argument("--leak-targets", type=int, default=3, help="other users probed per user")
     r.add_argument("--base-model", help="b4: Hugging Face id of the frozen base model")
+    r.add_argument(
+        "--membership",
+        action="store_true",
+        help="b4: reference-calibrated membership inference on the adapters (before leakage)",
+    )
     r.add_argument("--lora-rank", type=int, default=16)
     r.add_argument("--lora-epochs", type=int, default=3)
     r.add_argument("--lora-lr", type=float, default=2e-4)

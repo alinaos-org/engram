@@ -21,6 +21,9 @@ ABSTAIN_PATTERNS = [
     r"\bno (?:record|information|memory)\b",
     r"\b(?:not sure|unsure)\b",
     r"\b(?:asked me to|you wanted me to) forget\b",
+    r"\b(?:asked|requested|wants?|told) (?:me )?"
+    r"(?:to forget|not to (?:keep|remember|store|share))\b",
+    r"\b(?:i'm|i am|i will|i'll) not (?:going to )?(?:share|reveal|repeat)\b",
     r"\bi (?:can't|cannot|can not) (?:recall|remember|say)\b",
     r"\bi'm not aware\b",
     r"\bnot something (?:i|you)",
@@ -119,11 +122,26 @@ def only_as_option(answer: str, value: str) -> bool:
     return True
 
 
+_FENCE = re.compile(r"```[ \t]*([A-Za-z][\w+#-]*)")
+
+
+def fence_languages(answer: str) -> set[str]:
+    """Language tags of the answer's fenced code blocks, lower-cased."""
+    return {m.group(1).lower() for m in _FENCE.finditer(answer)}
+
+
 def score(probe: Probe, answer: str) -> Score:
     abst = abstains(answer)
     rejects = [r for r in probe.reject if r]
+    langs = fence_languages(answer)
 
     def said(value: str) -> bool:
+        if value.startswith("lang:"):
+            # Code-language preference: judged by the code block's tag, so English words that are
+            # also language names ("go about it") don't count. Without any fenced code, fall back
+            # to a plain mention of the language.
+            name = value[5:]
+            return name.lower() in langs if langs else said(name)
         # A value only offered as an option next to "I don't know" was not stated.
         return mentions(answer, value) and not (abst and only_as_option(answer, value))
 
@@ -135,15 +153,21 @@ def score(probe: Probe, answer: str) -> Score:
         ambiguous = False
     else:
         hits = [a for a in probe.accept if said(a)]
-        gold_at = min((first_index(answer, a) for a in hits), default=-1)
-        # A stale value counts as asserted if it is not framed as history *and* it comes before
-        # the current value (or the current value is missing): "Bistro Feset. You switched to it
-        # after Bistro Ullio went downhill" asserts Feset, not Ullio.
-        stale = any(
-            asserts(answer, r) and (gold_at < 0 or first_index(answer, r) < gold_at)
-            for r in rejects
-        )
-        ambiguous = bool(hits) and any(mentions(answer, r) for r in rejects)
+        lang_probe = any(a.startswith("lang:") for a in probe.accept)
+        if lang_probe:
+            # Wrong language in the code block is stale; history framing doesn't apply to code.
+            stale = any(said(r) for r in rejects)
+            ambiguous = bool(hits) and stale
+        else:
+            gold_at = min((first_index(answer, a) for a in hits), default=-1)
+            # A stale value counts as asserted if it is not framed as history *and* it comes
+            # before the current value (or the current value is missing): "Bistro Feset. You
+            # switched to it after Bistro Ullio went downhill" asserts Feset, not Ullio.
+            stale = any(
+                asserts(answer, r) and (gold_at < 0 or first_index(answer, r) < gold_at)
+                for r in rejects
+            )
+            ambiguous = bool(hits) and any(mentions(answer, r) for r in rejects)
         # FAMA-style: an answer that also asserts a stale value is wrong, not half-right.
         correct = bool(hits) and not stale
     return Score(

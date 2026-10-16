@@ -71,7 +71,7 @@ A generator model writes natural sessions from the world state, so items are men
 | # | Category | What a probe looks like | Metric |
 |---|---|---|---|
 | 1 | **Fact recall** | "What's my sister's name?" (direct) / "Who should I invite if I want family there?" (indirect) | Accuracy, split direct vs indirect |
-| 2 | **Preference application** | An unrelated request where the stored preference should shape the answer without being mentioned | Constraint-consistency rate (LoCoMo-Plus style), LLM judge with rubric |
+| 2 | **Preference application** | An unrelated request where the stored preference should shape the answer without being mentioned | Implemented for code language (scored by the code block's language tag) and units (scored by unit words). Other preferences need an LLM judge with a rubric (LoCoMo-Plus style) |
 | 3 | **Decision recall** | "Why did we pick self-hosting?" / a request that would contradict the decision | Accuracy, and contradiction rate |
 | 4 | **Fact updating** | "Where do I live?" after a move | **FAMA**-style accuracy (Memora): credit only the current value; a stale value counts as wrong, not as a miss |
 | 5 | **Temporal reasoning** | "Had I moved yet when the deploy failed?" | Accuracy |
@@ -92,6 +92,27 @@ A forget request is honoured only if all three checks pass:
 3. **In storage.** The item is physically gone from the retrieval log and from every adapter consolidated after the request, with no residue left in derived memories.
 
 For **all**-scope requests and for deleted users, the check is that the module and its key were destroyed and that the shared base is unchanged. The base never trains on user data, so this should hold by construction, and we test it anyway.
+
+#### Membership inference (check 2)
+
+`engram/bench/membership.py` runs check 2 against per-user LoRA adapters (B4 today, Engram's later); use `engram-bench run --system b4 --membership`. The attacker holds the user's decrypted adapter and the public base (threat X2 in [threat-model.md](threat-model.md)). Following LoRA-Leak ([arXiv:2507.18302](https://arxiv.org/abs/2507.18302)), the pre-trained base is the reference model: score(x) = loss_base(x) − loss_base+adapter(x), where higher means more likely a member. Loss is the mean next-token loss over the message formatted exactly as in training.
+
+- **Candidates.** Every planted assert, update or canary message, in three groups. *Member*: trained on and never forgotten. *Forgotten*: trained on, and the user later asked to forget it; it counts only once a sleep has run since the request. *Incognito*: from an incognito session, so never trained on.
+- **Non-members.** Each candidate gets a twin: the same message with every planted value replaced by a fresh value from the same slot generator that the user never had. Twins share template and value distribution with their candidates and differ only in whether the adapter saw them.
+- **Each group is scored against its own twins.** Adapters also learn templates, so a pooled non-member set confounds template exposure with membership. In the first smoke, pooling put incognito at AUC 0.19.
+- **Statistic.** ROC AUC (Mann-Whitney), per user and pooled, with a stratified bootstrap 95% CI over messages. The CI is optimistic because messages within a user are correlated; use a user-level bootstrap at scale.
+- **Targets.** Forgotten and incognito AUC ≈ 0.5. Member AUC is the exposure figure for open decision 1 in threat-model.md §8 (DP in consolidation, or key custody alone).
+- **Run it before anything deletes users**, because the leakage pass deletes every probed user. `--membership` handles the ordering.
+
+First smoke, B4 on Qwen3-0.6B (CPU; 4 users × 12 sessions; rank 16, 3 epochs, cumulative):
+
+| Group | AUC [95% CI] | n |
+|---|---|---|
+| Member | 0.70 [0.57, 0.80] | 46 |
+| Forgotten | 0.89 [0.72, 1.00] | 10 |
+| Incognito | 0.53 [0.23, 0.81] | 8 |
+
+B4 does not honour forget requests, so a high forgotten AUC is the expected baseline failure. Loss covers the whole formatted message, chat-template tokens included; scoring only the value tokens would likely sharpen the attack.
 
 ### Leakage
 
@@ -130,7 +151,7 @@ Use the same frozen base model wherever possible, so differences come from memor
 | B2 | Frontier model + retrieval over the session log | The claim Engram has to beat |
 | B3 | Engram's base + retrieval over the log (session-level chunks) | Same model, memory in the harness |
 | B4 | Engram's base + per-user LoRA trained on raw transcripts | Naive in-weights memory |
-| B5 | Mem0 (open source) | Extract-and-consolidate text memory |
+| B5 | Mem0 (open source) | Extract-and-consolidate text memory. Implemented: its LLM runs through `engram-serve` so it uses the same model as the other baselines |
 | B6 | Zep / Graphiti | Temporal knowledge graph; strongest on updates |
 | B7 | Letta (MemGPT) | Self-managed tiered memory |
 | E-* | Engram ablations: fast memory only, adapter only, log only, and combinations | Which part does the work |

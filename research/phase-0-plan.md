@@ -121,6 +121,9 @@ Module swap, canary sweep, retrieval-log ownership gating, and storage audit aft
 | G8 compute | `engram-measure` (serving throughput, sleep cost) is ready to run on the GPU day |
 | G9 threat model | [Written](threat-model.md) and linked from SECURITY.md |
 | B4 | Per-user LoRA baseline implemented and tested on CPU; real runs on the GPU day |
+| B5 | Mem0 adapter done. Mem0's own LLM calls go through `engram-serve`, a local OpenAI-compatible shim in front of any engram model, so subscription models work. B6 (Zep/Graphiti) and B7 (Letta) can reuse the shim |
+| G1 long sessions | `LongWriter` (8–14 LLM-written messages per session; planted values checked verbatim, forget requests and canaries inserted word for word) and opt-in preference-application probes. A prototype is generated with Claude Sonnet; v1 still needs an open-weights writer |
+| G10 pre-registration | [Drafted](phase-1-preregistration.md): H1–H5 with thresholds, analysis and decision rules |
 
 ## Risks
 

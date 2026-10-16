@@ -146,7 +146,7 @@ Abstain items name an entity or attribute plausibly absent from the text, with t
 7. **Probe-level filter:** drop probes whose question is a near-duplicate of any eval question (MinHash Jaccard ≥ 0.8 on word 5-grams, assumption).
 8. **Report:** `contamination_report.json` with per-source counts of dropped chunks and probes and the matching eval ids. It is published with the data card.
 
-## (e) Rebuild script outline (not yet written)
+## (e) Rebuild script outline (implemented as `engram-corpus`; see the status section at the end)
 
 ```text
 engram-corpus build --config configs/phase1-v0.yaml --out data/phase1/v0 --seed 0
@@ -188,3 +188,40 @@ The script is deterministic given the seed, pinned revisions and model ids. LLM 
 - ConversationChronicles abstract: [ACL Anthology 2023.emnlp-main.838](https://aclanthology.org/2023.emnlp-main.838/).
 - LoCoMo: [snap-research/locomo](https://github.com/snap-research/locomo) README and `LICENSE.txt`. LongMemEval: [xiaowu0162/LongMemEval](https://github.com/xiaowu0162/LongMemEval) README. PrefEval: [amazon-science/PrefEval](https://github.com/amazon-science/PrefEval) README and `LICENSE`, and [arXiv:2502.09597](https://arxiv.org/abs/2502.09597) §2.4 (LMSYS-Chat-1M filler).
 - Generator and verifier licences: HF API for `mistralai/Mistral-Small-3.2-24B-Instruct-2506` and `allenai/Olmo-3.1-32B-Instruct`.
+
+## Rebuild script (status, 2026-10-15)
+
+The outline in (e) is now `engram/corpus/`, run as `engram-corpus` (`python -m engram.corpus` until the entry point is registered). The v0 mix in (a) is `configs/corpus-v0.json`. `tests/test_corpus.py` covers every stage on fixtures, with no network and no model.
+
+**Stages.** fetch → filter → bios → chunk → decontam → probes → episodes → pack → card. `generate`, `probe` and `verify` are accepted as aliases. One change from the outline: the 13-gram filter runs on chunks, after `chunk`, so a dropped chunk ends its episode (§d.4).
+
+**Implemented as planned.**
+- Capped, streaming fetch at pinned revisions. Network fetches refuse to run without `--cap` or a token budget. Lineage exclusions are refused, and ablation sources need `--allow-ablation`.
+- The filters in (e).2, including PG-19 hold-outs by Gutenberg id and MinHash dedup across sources.
+- The bioS-style generator, with updates, abstention and indirect probes. Gold answers come from the record, and the build asserts the name pools are disjoint from engram-bench.
+- Paragraph-snapped 1/2/4K chunking, with the tokenizer pluggable: Qwen3, or a whitespace approximation.
+- Episodes with mixed episodes and lag buckets.
+- Reference set R, the template regexes, and the canary and user-name sweep. A canary or name hit anywhere, or a template hit in generated data, fails the build.
+- The probe-level filter, the data card and the manifest.
+
+**Not done, or different.**
+- **LLM stages.** Natural-text probe generation and verification is an interface: `LLMProbeGenerator` and `ChatVerifier` over `ChatModel`, cached by model@revision and prompt. `--dry-run` writes the requests and a token estimate. No model has been run. Synthetic threads (E), restatements (F) and the bio paraphrase pass are not implemented; their config entries are `use: false`. The generator prompt sees one chunk, so `cross_chunk` items cannot cite a second chunk yet.
+- **Chunking.** The write size is drawn per document, not per episode.
+- **Bio templates.** There are 4–6 per attribute; bioS uses about 50.
+- **Probe near-duplicates.** These use exact Jaccard on word 5-grams, not MinHash.
+- **Pack.** Shards are JSONL, not parquet.
+- **Stock phrases.** Removal needs at least 1,000 background documents, so it is skipped on small builds.
+- **Gutenberg boilerplate.** It is not stripped.
+- **Memory.** The episodes stage holds all chunks in memory; a 10B build needs it sharded by document.
+- **Human spot-check** (§c.5). It stays manual.
+
+**Smoke build (5 docs per source, `whitespace:1.3` tokens).** All eight Hugging Face sources stream with `datasets` 5.1.0. The config pins the shas they resolved to.
+- `deepmind/pg19` is a loading script, which `datasets` ≥ 4 refuses, so fetch streams the `emozilla/pg19` parquet copy.
+- peS2o rows carry `metadata.oa_license` (for example `CCBY`), not `metadata.license` as the card says. The filter reads both.
+- ConversationChronicles has one `time_interval` per session, and the first is "Start".
+
+Decontamination against engram-bench (seed 0), LongMemEval oracle and `_s`, and LoCoMo found 29.4M reference shingles and took about 100–150 s. LongMemEval `_m` and PrefEval are not downloaded. It dropped:
+- 25 of 899 Gutenberg chunks: Bible and Declaration of Independence passages that LongMemEval `_s` sessions quote;
+- 1 of 25 ConversationChronicles chunks, on a stock phrase it shares with LongMemEval.
+
+It dropped no bio chunks or probes, and there were no fatal hits.

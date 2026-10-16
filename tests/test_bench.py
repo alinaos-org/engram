@@ -74,7 +74,7 @@ def test_all_categories_present():
     big = dataset.generate(dataset.BenchConfig(users=20, sessions=30, seed=0))
     cats = Counter(p.category for p in big.probes())
     for c in Category:
-        if c != Category.LEAKAGE:
+        if c not in (Category.LEAKAGE, Category.APPLICATION):  # leakage: harness; app: opt-in
             assert cats[c] > 0, c
 
 
@@ -87,6 +87,8 @@ def test_scoring_rules():
     assert not abstains("Your dog is Rex.")
     assert abstains("I don\u2019t know which editor you use.")
     assert abstains("You didn't mention where you work.")
+    assert abstains("User asked to forget city; don't reveal.")
+    assert abstains("You asked me not to keep your city, so I'm not going to share it.")
     lo, hi = bootstrap_ci([True] * 50 + [False] * 50)
     assert lo < 0.5 < hi
 
@@ -192,3 +194,58 @@ def test_kappa():
 
 def test_phase_values_roundtrip(bench):
     assert {p.phase for p in bench.probes()} <= set(Phase)
+
+
+def test_application_probes_opt_in_and_scoring():
+    plain = dataset.generate(dataset.BenchConfig(users=6, sessions=15, seed=7))
+    assert not any(p.category == Category.APPLICATION for p in plain.probes())
+    big = dataset.generate(
+        dataset.BenchConfig(users=20, sessions=30, seed=0, application_probes=True)
+    )
+    apps = [p for p in big.probes() if p.category == Category.APPLICATION]
+    assert apps
+    code = next(p for p in apps if p.accept[0].startswith("lang:"))
+    lang = code.accept[0][5:]
+    assert score(code, f"Here you go:\n```{lang.lower()}\nprint(1)\n```").correct
+    assert not score(code, "Here's how to go about it:\n```cobol\nX\n```").correct
+    assert score(code, lang).correct  # no code block: plain mention counts (oracle)
+    unit = next((p for p in apps if p.question.startswith("Roughly")), None)
+    if unit:
+        word = unit.accept[0]
+        assert score(unit, f"About 200 {word}.").correct
+    oracle = run(big, OracleMemory(big), leakage=False)
+    assert all(s.correct for s in oracle.scores if s.category == "application")
+
+
+def test_long_writer_keeps_every_planted_value():
+    import json as _json
+    import re as _re
+
+    from engram.bench.writer import LongWriter
+
+    class FakeWriter(NullModel):
+        """Writes N long messages and drops every second fact, to exercise the fallback."""
+
+        def complete(self, messages, *, max_tokens=512):
+            prompt = messages[-1]["content"]
+            n = int(_re.search(r"Write (\d+) user messages", prompt).group(1))
+            facts = _re.findall(r"^- (.+?)  \(exact strings", prompt, flags=_re.M)
+            msgs = [f"Working on it, message {i}. " + "lorem " * 50 for i in range(n)]
+            for i, fact in enumerate(facts[::2]):
+                msgs[i % n] += " By the way: " + fact
+            return "```json\n" + _json.dumps({"messages": msgs}) + "\n```"
+
+    writer = LongWriter(FakeWriter(), workers=3)
+    bench = dataset.generate(dataset.BenchConfig(users=3, sessions=9, seed=11), writer)
+    for user in bench.users:
+        text = " ".join(t.text for s in user.sessions for t in s.turns)
+        for item in user.items:
+            for change in item.timeline:
+                if change.value:
+                    assert change.value in text
+        planted = [t.event for s in user.sessions for t in s.turns if t.event]
+        assert sum(e.kind == EventKind.CANARY for e in planted) == 1
+        assert all(len(s.turns) >= 8 for s in user.sessions)
+    assert writer.fallbacks > 0 and writer.failed_sessions == 0
+    oracle = run(bench, OracleMemory(bench), leakage=False)
+    assert all(s.correct for s in oracle.scores)

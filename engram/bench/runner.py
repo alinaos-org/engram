@@ -8,6 +8,7 @@ user has been run, the leakage harness probes across users.
 from __future__ import annotations
 
 import dataclasses
+import inspect
 import json
 import platform
 import re
@@ -34,9 +35,21 @@ class RunResult:
     manifest: dict = field(default_factory=dict)
 
 
-def ask(system: MemorySystem, question: str) -> str:
+def start(system: MemorySystem, *, write: bool, day: int | None = None) -> None:
+    """Start a session, passing the simulated day to systems whose ``start_session`` takes it."""
+    try:
+        accepts_day = "day" in inspect.signature(system.start_session).parameters
+    except (TypeError, ValueError):
+        accepts_day = False
+    if accepts_day:
+        system.start_session(write=write, day=day)
+    else:
+        system.start_session(write=write)
+
+
+def ask(system: MemorySystem, question: str, day: int | None = None) -> str:
     """Probes run in their own session and must never be written to memory."""
-    system.start_session(write=False)
+    start(system, write=False, day=day)
     answer = system.respond(question)
     system.end_session()
     return answer
@@ -65,11 +78,11 @@ def _play_user(system: MemorySystem, user, sleeps: set[int], session_replies: bo
         if clock:
             clock(s, phase.value)
         for p in due.get((s, phase), []):
-            scores.append(score(p, ask(system, p.question)))
+            scores.append(score(p, ask(system, p.question, user.sessions[s].day)))
 
     system.load_user(user.id)
     for session in user.sessions:
-        system.start_session(write=not session.incognito)
+        start(system, write=not session.incognito, day=session.day)
         for turn in session.turns:
             if observe:
                 observe(turn.text)
@@ -89,7 +102,7 @@ def _replay(system: MemorySystem, bench: Benchmark, sleeps: set[int]) -> None:
     for user in bench.users:
         system.load_user(user.id)
         for session in user.sessions:
-            system.start_session(write=not session.incognito)
+            start(system, write=not session.incognito, day=session.day)
             for turn in session.turns:
                 system.observe(turn.text)  # type: ignore[attr-defined]
             system.end_session()

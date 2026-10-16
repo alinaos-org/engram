@@ -14,6 +14,10 @@ dev = ["pytest>=8", "ruff>=0.6"]
 #   local CPU:  uv sync --extra dev --extra ml --extra cpu
 #   AWS GPU:    uv sync --extra dev --extra ml --extra cu130
 ml = ["transformers>=5", "peft>=0.21", "sentence-transformers>=6", "accelerate>=1.10"]
+# B5 Mem0 with its keyword search and lemmatiser; also needs the ml extra for local embeddings.
+# spaCy's English model is a separate download: uv run python -m spacy download en_core_web_sm
+baselines = ["mem0ai[nlp]>=2.2", "fastembed>=0.3.1"]
+corpus = ["datasets>=4"]  # engram-corpus fetch (Phase 1 corpus)
 cpu = ["torch>=2.14"]
 cu130 = ["torch>=2.14"]
 
@@ -21,6 +25,8 @@ cu130 = ["torch>=2.14"]
 engram-bench = "engram.cli:main"
 engram-compute = "engram.compute:main"
 engram-measure = "engram.measure:main"
+engram-serve = "engram.models.serve:main"
+engram-corpus = "engram.corpus.cli:main"
 
 [tool.uv]
 conflicts = [[{ extra = "cpu" }, { extra = "cu130" }]]

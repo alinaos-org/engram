@@ -38,6 +38,7 @@ class Category(StrEnum):
     FORGET = "forget"  # 7
     INCOGNITO = "incognito"  # 8
     LEAKAGE = "leakage"  # 9 (run by the leakage harness)
+    APPLICATION = "application"  # 2b: a preference shapes an answer without being asked about
 
 
 class Phase(StrEnum):

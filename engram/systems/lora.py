@@ -85,7 +85,7 @@ class LoRAMemory:
     def unload_user(self) -> None:
         self.user = None
 
-    def start_session(self, *, write: bool = True) -> None:
+    def start_session(self, *, write: bool = True, day: int | None = None) -> None:
         self.context, self.write = [], write
 
     def end_session(self) -> None:
@@ -198,3 +198,49 @@ class LoRAMemory:
         self.model.eval()
         for p in params:
             p.requires_grad = False
+
+    # -- membership inference (engram.bench.membership) -------------------------------------
+
+    def sequence_losses(
+        self, user_id: str, texts: list[str], *, batch_size: int | None = None
+    ) -> list[float]:
+        """Mean next-token loss of each user message, formatted exactly as ``_train`` formats it,
+        with ``user_id``'s adapter active. Raises KeyError if that user has no adapter."""
+        name = self._adapter(user_id)
+        if name not in self.adapters:
+            raise KeyError(f"no adapter for {user_id!r}")
+        self.model.set_adapter(name)
+        return self._losses(texts, batch_size)
+
+    def base_losses(self, texts: list[str], *, batch_size: int | None = None) -> list[float]:
+        """As ``sequence_losses`` but on the frozen base: the reference model in LoRA-Leak."""
+        with self.model.disable_adapter():
+            return self._losses(texts, batch_size)
+
+    def _losses(self, texts: list[str], batch_size: int | None) -> list[float]:
+        torch = self.torch
+        bs = batch_size or self.cfg.batch_size
+        formatted = [
+            self._format([{"role": "user", "content": t}], generation=False) for t in texts
+        ]
+        out: list[float] = []
+        side, self.tok.padding_side = self.tok.padding_side, "right"  # causal: pads never attended
+        self.model.eval()
+        try:
+            with torch.no_grad():
+                for i in range(0, len(formatted), bs):
+                    batch = self.tok(
+                        formatted[i : i + bs], return_tensors="pt", padding=True, truncation=True,
+                        max_length=self.cfg.max_len,
+                    ).to(self.device)  # fmt: skip
+                    logits = self.model(**batch).logits[:, :-1].float()
+                    target = batch["input_ids"][:, 1:]
+                    mask = batch["attention_mask"][:, 1:].float()
+                    nll = torch.nn.functional.cross_entropy(
+                        logits.transpose(1, 2), target, reduction="none"
+                    )
+                    per_text = (nll * mask).sum(1) / mask.sum(1).clamp(min=1)
+                    out.extend(per_text.tolist())
+        finally:
+            self.tok.padding_side = side
+        return out

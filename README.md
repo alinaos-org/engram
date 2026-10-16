@@ -116,7 +116,7 @@ uv run engram-bench run --bench data/bench-v0 --system b2 --model claude:claude-
 uv run engram-bench report runs/b2-claude --floor runs/b0-claude
 ```
 
-Dense or hybrid retrieval and the per-user LoRA baseline (`--system b4`) need the `ml` extra: `uv sync --extra dev --extra ml --extra cpu` locally, or `--extra cu130` on a GPU. On NixOS, first run `source scripts/nixos-ml-env.sh`. Public benchmarks are imported with `scripts/fetch-datasets.sh` (LongMemEval, LoCoMo), and `engram-bench judge` grades their free-form answers. GPU runs on AWS follow [docs/aws-gpu.md](docs/aws-gpu.md).
+Long LLM-written sessions come from `generate --writer long --writer-model …`. `engram-serve` exposes any of these models as a local OpenAI-compatible endpoint, for third-party memory systems such as Mem0 (`--system b5`, `baselines` extra). Dense or hybrid retrieval and the per-user LoRA baseline (`--system b4`) need the `ml` extra: `uv sync --extra dev --extra ml --extra cpu` locally, or `--extra cu130` on a GPU. On NixOS, first run `source scripts/nixos-ml-env.sh`. Public benchmarks are imported with `scripts/fetch-datasets.sh` (LongMemEval, LoCoMo), and `engram-bench judge` grades their free-form answers. GPU runs on AWS follow [docs/aws-gpu.md](docs/aws-gpu.md).
 
 `engram-compute` reproduces the compute assumptions in the experiment plan, so you can change them and re-run; `engram-measure` replaces them with measurements on real hardware.
 

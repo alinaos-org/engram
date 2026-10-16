@@ -25,9 +25,10 @@ class MemorySystem(Protocol):
     def unload_user(self) -> None:
         """Detach the current user's module."""
 
-    def start_session(self, *, write: bool = True) -> None:
+    def start_session(self, *, write: bool = True, day: int | None = None) -> None:
         """Begin a session with an empty context. ``write=False`` means nothing from this session
-        may be stored: incognito sessions and probe sessions."""
+        may be stored: incognito sessions and probe sessions. ``day`` is the simulated day of the
+        user's timeline (days since their first session); systems may ignore it."""
 
     def respond(self, message: str) -> str:
         """Reply to one user message within the current session."""
