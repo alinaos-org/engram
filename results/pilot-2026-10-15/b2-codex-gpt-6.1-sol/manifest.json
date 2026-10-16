@@ -1,0 +1,43 @@
+{
+  "engram_version": "0.0.1",
+  "git_commit": "382272aec4cd96612852488942384516de0016de",
+  "system": {
+    "system": "B2",
+    "model": "codex:gpt-6.1-sol",
+    "k": 5,
+    "retriever": "hybrid"
+  },
+  "system_name": "b2-retrieval:codex:gpt-6.1-sol",
+  "bench": {
+    "config": {
+      "users": 10,
+      "sessions": 30,
+      "seed": 0,
+      "sleep_every": 3,
+      "late_sleeps": 3,
+      "items_per_user": 10,
+      "abstain_per_user": 3
+    },
+    "writer": "template"
+  },
+  "bench_sha256": "7da145a8112e91daa2f8c71a95af9e0bc9444ccdca1748158e38cfc201dafa2b",
+  "n_users": 10,
+  "workers": 4,
+  "session_replies": false,
+  "python": "3.13.16",
+  "host": "nova",
+  "wall_clock_s": 938.09,
+  "n_scores": 559,
+  "n_leak_checks": 246,
+  "cache": {
+    "hits": 294,
+    "misses": 511
+  },
+  "rescored": true,
+  "judge": {
+    "model": "claude:claude-opus-5-5",
+    "judged": 6,
+    "failed": 0
+  },
+  "redacted_emails": 0
+}

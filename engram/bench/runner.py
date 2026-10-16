@@ -7,8 +7,10 @@ user has been run, the leakage harness probes across users.
 
 from __future__ import annotations
 
+import dataclasses
 import json
 import platform
+import re
 import subprocess
 import time
 from collections import defaultdict
@@ -181,8 +183,26 @@ def run(
     return result
 
 
+_EMAIL = re.compile(r"[\w.+-]+@[\w-]+(?:\.[\w-]+)+")
+
+
+def scrub(text: str) -> tuple[str, int]:
+    """Redact email addresses. Synthetic users have none, so any email in an answer came from the
+    model's own context (the Claude CLI injects the operator's account email) and must never be
+    written to results that may be published."""
+    return _EMAIL.subn("[redacted-email]", text)
+
+
 def save_run(result: RunResult, out: Path) -> Path:
     out.mkdir(parents=True, exist_ok=True)
+    redacted = 0
+    for coll in (result.scores, result.leaks):
+        for i, item in enumerate(coll):
+            clean, n = scrub(item.answer)
+            if n:
+                coll[i] = dataclasses.replace(item, answer=clean)
+                redacted += n
+    result.manifest["redacted_emails"] = result.manifest.get("redacted_emails", 0) + redacted
     with (out / "results.jsonl").open("w", encoding="utf-8") as f:
         for s in result.scores:
             f.write(json.dumps(asdict(s), ensure_ascii=False) + "\n")

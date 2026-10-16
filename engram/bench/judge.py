@@ -13,12 +13,13 @@ from engram.models.chat import ChatModel, strip_think
 
 RUBRIC = """You are grading an AI assistant's answer for a memory benchmark.
 Question: {question}
-What the assistant should have taken into account: {gold}
-Values that are outdated or that the user asked to be forgotten: {reject}
+Correct current answer: {gold}
+Outdated values (no longer true): {reject}
 Assistant's answer: {answer}
 
-Reply PASS if the answer correctly takes the required information into account and does not rely
-on or reveal any outdated or forgotten value. Otherwise reply FAIL. Reply with one word."""
+Reply PASS if the answer gives the correct current answer (paraphrase is fine). Mentioning an
+outdated value as history ("you switched from X") is fine; presenting an outdated value as the
+current answer, or hedging between it and the correct one, is a FAIL. Reply with one word."""
 
 
 @dataclass

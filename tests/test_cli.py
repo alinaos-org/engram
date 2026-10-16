@@ -44,6 +44,7 @@ def test_cli_import_and_judge(tmp_path, capsys):
     assert manifest["judge"]["judged"] > 0
     rows = [json.loads(x) for x in (run_dir / "results.jsonl").read_text().splitlines()]
     assert sum(not r["correct"] for r in rows) == manifest["judge"]["judged"]
+    assert manifest["judge"]["failed"] == 0
 
 
 def test_cli_calibrate_roundtrip(tmp_path, capsys):

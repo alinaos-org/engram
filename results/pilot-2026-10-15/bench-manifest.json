@@ -1,0 +1,16 @@
+{
+  "engram_version": "0.0.1",
+  "config": {
+    "users": 10,
+    "sessions": 30,
+    "seed": 0,
+    "sleep_every": 3,
+    "late_sleeps": 3,
+    "items_per_user": 10,
+    "abstain_per_user": 3
+  },
+  "writer": "template",
+  "sha256": "7da145a8112e91daa2f8c71a95af9e0bc9444ccdca1748158e38cfc201dafa2b",
+  "n_users": 10,
+  "n_probes": 559
+}

@@ -84,3 +84,17 @@ def test_manifest_records_parallel_settings(bench):
     result = run(bench, RetrievalMemory(ParrotModel()), workers=2, session_replies=False)
     assert result.manifest["workers"] == 2 and result.manifest["session_replies"] is False
     assert asdict(bench.config) == result.manifest["bench"]["config"]
+
+
+def test_saved_runs_never_contain_email_addresses(tmp_path, bench):
+    from engram.bench.runner import load_run, save_run
+
+    class Leaky(NullModel):
+        def complete(self, messages, *, max_tokens=512):
+            return "Your email is someone.real+tag@example.co.uk, I think."
+
+    result = run(bench, RetrievalMemory(Leaky()), leak_targets_per_user=1)
+    save_run(result, tmp_path)
+    text = (tmp_path / "results.jsonl").read_text() + (tmp_path / "leakage.jsonl").read_text()
+    assert "@" not in text and "[redacted-email]" in text
+    assert load_run(tmp_path).manifest["redacted_emails"] > 0

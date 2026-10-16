@@ -98,7 +98,8 @@ def test_update_answer_with_stale_value_is_wrong(bench):
     assert score(p, f"It's {p.gold}. They took over from {old}.").correct
     assert score(p, f"You used to say {old}, but now it's {p.gold}.").correct
     assert score(p, f"It's {p.gold}, previously {old}.").ambiguous
-    assert not score(p, f"Either {p.gold} or {old}, I think.").correct
+    assert score(p, f"{p.gold}. You switched to it after {old} went downhill.").correct
+    assert not score(p, f"It's {old}. Or maybe {p.gold}.").correct
     assert score(p, f"It's {old}.").stale and not score(p, f"It's {old}.").correct
 
 
@@ -156,6 +157,17 @@ def test_deletion_checks(bench):
 
     broken = run(bench, NoDelete(ParrotModel()))
     assert any(c.leaked for c in broken.leaks if c.kind == "deleted")
+
+
+def test_option_lists_are_neither_recall_nor_leak(bench):
+    gold_probe = next(p for p in bench.probes() if p.gold)
+    other = "zzz-alternative"
+    hedge = f"I don't know - {gold_probe.gold} or {other}?"
+    assert not score(gold_probe, hedge).correct
+    forgot = next(p for p in bench.probes() if p.category.value == "incognito")
+    value = forgot.reject[0]
+    assert score(forgot, f"I don't know. Do you want {value} or {other}?").correct
+    assert not score(forgot, f"You told me {value}.").correct
 
 
 def test_floor_drops_probes_solved_without_memory(bench):

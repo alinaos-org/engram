@@ -158,15 +158,27 @@ def cmd_judge(args) -> None:
         if (s.probe_id in flagged or s.ambiguous) and probes[s.probe_id].gold is not None
     ]  # fmt: skip
 
-    def grade(i: int) -> tuple[int, bool]:
+    def grade(i: int) -> tuple[int, bool | None]:
         s = result.scores[i]
         p = probes[s.probe_id]
-        return i, judge.grade(p.question, p.gold or "", p.reject, s.answer)
+        try:
+            return i, judge.grade(p.question, p.gold or "", p.reject, s.answer)
+        except Exception as e:  # keep the string-match verdict; re-running retries only these
+            print(f"judge failed on {s.probe_id}: {e}", file=sys.stderr)
+            return i, None
 
+    failed = 0
     with ThreadPoolExecutor(args.workers) as pool:
         for i, verdict in pool.map(grade, todo):
-            result.scores[i] = dataclasses.replace(result.scores[i], correct=verdict)
-    result.manifest["judge"] = {"model": judge.model.name, "judged": len(todo)}
+            if verdict is None:
+                failed += 1
+            else:
+                result.scores[i] = dataclasses.replace(result.scores[i], correct=verdict)
+    result.manifest["judge"] = {
+        "model": judge.model.name,
+        "judged": len(todo) - failed,
+        "failed": failed,
+    }
     save_run(result, Path(args.out or args.run))
     print(report(result.scores, result.leaks, f"{result.manifest.get('system_name')} (judged)"))
 

@@ -90,7 +90,8 @@ class ClaudeCLI:
         try:
             data = json.loads(proc.stdout)
         except json.JSONDecodeError as e:
-            raise CLIError(f"claude exited {proc.returncode}: {proc.stderr[-500:]}") from e
+            detail = (proc.stderr or proc.stdout)[-500:]
+            raise CLIError(f"claude exited {proc.returncode}: {detail}") from e
         if data.get("is_error"):
             raise CLIError(f"claude error: {str(data.get('result'))[:500]}")
         return data.get("result") or ""

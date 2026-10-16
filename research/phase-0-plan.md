@@ -113,10 +113,13 @@ Module swap, canary sweep, retrieval-log ownership gating, and storage audit aft
 | Gate | State |
 |---|---|
 | G1 benchmark v0 | Generator, probes, scorers and floor done. LongMemEval-S/oracle and LoCoMo convert, and an LLM judge grades free-form answers. Sessions are short (template writer): still to do are long LLM-written sessions that exceed the context window |
-| G2 discrimination | Frontier pilot on subscriptions (10 users; B0, B1, B2 with hybrid retrieval) is in `runs/pilot`. Base-model B0, B1, B3 wait on the GPU day |
-| G3 leakage harness | Done. It catches the leaky control and shows 0 false positives on gated systems |
+| G2 discrimination | **Passes on the pilot** ([report](phase-0-pilot.md)): B0 0.28 vs B1 0.98. Frontier + retrieval trails full context on forget (0.42), update (0.70) and temporal (0.71–0.80) with both Claude and GPT. Still to do: repeat on long sessions with 50 users, B5–B7, and base-model runs on the GPU day |
+| G3 leakage harness | Done: module swap, extraction sweep and **deletion checks**. It catches the leaky and no-delete controls, and found 0 leaks in the pilot |
 | G4 base model | Recommendation: **Qwen3-8B** primary, Llama-3.1-8B-Instruct fallback ([shortlist](base-model-shortlist.md)). The hybrid comparator changes from Nemotron-H-8B (research-only licence) to **Qwen3.5-9B**. Final once B3/B4 run |
+| G5 fast-memory design | [Design note](fast-memory-design.md) with three candidates. First reproduction: TTT-NTP on Qwen3-0.6B-Base (released script), ~40–70 GPU-h assumed |
+| G7 corpus | [Data card](phase1-corpus.md) written; the rebuild script is still to do |
 | G8 compute | `engram-measure` (serving throughput, sleep cost) is ready to run on the GPU day |
+| G9 threat model | [Written](threat-model.md) and linked from SECURITY.md |
 | B4 | Per-user LoRA baseline implemented and tested on CPU; real runs on the GPU day |
 
 ## Risks

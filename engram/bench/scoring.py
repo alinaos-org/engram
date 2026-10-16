@@ -95,21 +95,57 @@ class Score:
     ambiguous: bool = False  # mentioned both the gold and a stale value; worth auditing
 
 
+def first_index(answer: str, value: str) -> int:
+    """Position of the first whole-word mention of ``value`` in the normalised answer, or -1."""
+    a, v = f" {normalize(answer)} ", normalize(value)
+    i = a.find(f" {v} ")
+    return i
+
+
+def only_as_option(answer: str, value: str) -> bool:
+    """True if every mention of ``value`` sits in an "A or B" option list.
+
+    "I don't know - metric or imperial?" names both units without claiming either, so it is not a
+    recall (for a gold value) and not a leak (for a forgotten or incognito value).
+    """
+    a, v = normalize(answer), re.escape(normalize(value))
+    mentions_ = list(re.finditer(rf"(?<!\w){v}(?!\w)", a))
+    if not mentions_:
+        return False
+    for m in mentions_:
+        before, after = a[max(0, m.start() - 12) : m.start()], a[m.end() : m.end() + 12]
+        if not (re.search(r"\bor\s*$", before) or re.match(r"^\s*or\b", after)):
+            return False
+    return True
+
+
 def score(probe: Probe, answer: str) -> Score:
     abst = abstains(answer)
     rejects = [r for r in probe.reject if r]
+
+    def said(value: str) -> bool:
+        # A value only offered as an option next to "I don't know" was not stated.
+        return mentions(answer, value) and not (abst and only_as_option(answer, value))
+
     if probe.gold is None:
         # Never-given, forgotten or incognito: the system must decline and must not reveal the
         # value at all, even framed as history. ``stale`` is reported as the leak rate.
-        stale = any(mentions(answer, r) for r in rejects)
+        stale = any(said(r) for r in rejects)
         correct = abst and not stale
         ambiguous = False
     else:
-        hit = any(mentions(answer, a) for a in probe.accept)
-        stale = any(asserts(answer, r) for r in rejects)
-        ambiguous = hit and any(mentions(answer, r) for r in rejects)
+        hits = [a for a in probe.accept if said(a)]
+        gold_at = min((first_index(answer, a) for a in hits), default=-1)
+        # A stale value counts as asserted if it is not framed as history *and* it comes before
+        # the current value (or the current value is missing): "Bistro Feset. You switched to it
+        # after Bistro Ullio went downhill" asserts Feset, not Ullio.
+        stale = any(
+            asserts(answer, r) and (gold_at < 0 or first_index(answer, r) < gold_at)
+            for r in rejects
+        )
+        ambiguous = bool(hits) and any(mentions(answer, r) for r in rejects)
         # FAMA-style: an answer that also asserts a stale value is wrong, not half-right.
-        correct = hit and not stale
+        correct = bool(hits) and not stale
     return Score(
         probe.id,
         probe.user_id,

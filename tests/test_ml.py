@@ -52,7 +52,8 @@ def test_lora_baseline_trains_per_user_adapters_and_deletes():
     result = run(bench, system, session_replies=False, leak_targets_per_user=1)
     assert len(result.scores) == sum(len(u.probes) for u in bench.users)
     assert system.train_steps > 0
-    assert system.adapters == {"u_u0000", "u_u0001"}
-    assert result.leaks
-    system.delete_user("u0000")
-    assert system.adapters == {"u_u0001"} and "u0000" not in system.logs
+    # Both users got adapters, then the leakage pass's deletion checks removed them again.
+    deleted = [c for c in result.leaks if c.kind == "deleted"]
+    assert {c.loaded_user for c in deleted} == {"u0000", "u0001"}
+    assert not any(c.leaked for c in deleted)
+    assert system.adapters == set() and not system.logs
