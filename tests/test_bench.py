@@ -145,6 +145,19 @@ def test_leakage_harness_passes_gated_and_catches_leaky(bench):
     assert any(c.leaked for c in leaky.leaks)
 
 
+def test_deletion_checks(bench):
+    gated = run(bench, RetrievalMemory(ParrotModel()))
+    deleted = [c for c in gated.leaks if c.kind == "deleted"]
+    assert deleted and not any(c.leaked for c in deleted)
+
+    class NoDelete(RetrievalMemory):
+        def delete_user(self, user_id):  # a system that "forgets" to delete
+            pass
+
+    broken = run(bench, NoDelete(ParrotModel()))
+    assert any(c.leaked for c in broken.leaks if c.kind == "deleted")
+
+
 def test_floor_drops_probes_solved_without_memory(bench):
     oracle = run(bench, OracleMemory(bench), leakage=False).scores
     kept = apply_floor(oracle, oracle)

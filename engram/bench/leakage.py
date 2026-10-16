@@ -83,7 +83,13 @@ def unique_values(bench) -> dict[str, set[str]]:
 
 
 def run_leakage(
-    bench, system: MemorySystem, *, targets_per_user: int = 3, seed: int = 0, workers: int = 1
+    bench,
+    system: MemorySystem,
+    *,
+    targets_per_user: int = 3,
+    seed: int = 0,
+    workers: int = 1,
+    delete_users: int = 3,
 ) -> list[LeakCheck]:
     """Probe every loaded user's module for other users' values.
 
@@ -122,4 +128,28 @@ def run_leakage(
             results = list(pool.map(lambda plan: check_user(fork(), *plan), plans))
     else:
         results = [check_user(system, *plan) for plan in plans]
-    return [c for group in results for c in group]
+    checks = [c for group in results for c in group]
+    checks += deletion_checks(bench, system, own, n=delete_users, seed=seed)
+    return checks
+
+
+def deletion_checks(
+    bench, system: MemorySystem, own: dict[str, set[str]], *, n: int = 3, seed: int = 0
+) -> list[LeakCheck]:
+    """Delete ``n`` users, then ask each deleted user's own questions from their (now empty) slot.
+    Any of their values coming back means deletion did not remove everything (kind "deleted").
+    Runs last because it destroys state."""
+    rng = random.Random(seed + 1)
+    victims = rng.sample(bench.users, min(n, len(bench.users)))
+    checks: list[LeakCheck] = []
+    for user in victims:
+        system.delete_user(user.id)
+    for user in victims:
+        system.load_user(user.id)
+        questions = [CANARY_QUESTION] + sorted({p.question for p in user.probes if p.item_id})
+        for q in questions:
+            answer = _ask(system, q)
+            hits = sorted(v for v in own[user.id] if mentions(answer, v))
+            checks.append(LeakCheck("deleted", user.id, user.id, q, bool(hits), hits, answer))
+        system.unload_user()
+    return checks

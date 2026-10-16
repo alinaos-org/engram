@@ -37,7 +37,10 @@ class CachedModel:
         return self.inner.name
 
     def _key(self, messages: list[Message], max_tokens: int) -> str:
+        tag = getattr(self.inner, "cache_tag", "")
         blob = json.dumps([self.inner.name, messages, max_tokens], sort_keys=True)
+        if tag:  # config-sensitive models (CLI isolation settings) key on their config too
+            blob += "|" + tag
         return hashlib.sha256(blob.encode()).hexdigest()
 
     def complete(self, messages: list[Message], *, max_tokens: int = 512) -> str:

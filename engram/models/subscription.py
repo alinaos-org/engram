@@ -15,6 +15,7 @@ Calls are slow (seconds each) and rate-limited, so wrap them in ``CachedModel``.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import subprocess
@@ -70,6 +71,10 @@ class ClaudeCLI:
     def name(self) -> str:
         return f"claude:{self.model}"
 
+    @property
+    def cache_tag(self) -> str:
+        return f"v1|{self.effort}"
+
     def _call(self, system: str, prompt: str) -> str:
         cmd = [
             "claude", "-p", "--model", self.model, "--effort", self.effort,
@@ -110,6 +115,10 @@ computer_use = false
 multi_agent = false
 image_generation = false
 goals = false
+# No shell: the read-only sandbox can still read files, including benchmark gold answers.
+shell_tool = false
+unified_exec = false
+view_image = false
 """
 
 
@@ -141,6 +150,11 @@ class CodexCLI:
     @property
     def name(self) -> str:
         return f"codex:{self.model}"
+
+    @property
+    def cache_tag(self) -> str:
+        """Changes whenever the isolation config changes, so cached answers are not reused."""
+        return hashlib.sha256(f"{CODEX_CONFIG}|{self.effort}".encode()).hexdigest()[:12]
 
     def _call(self, prompt: str) -> str:
         env = {**os.environ, "CODEX_HOME": str(self.home)}
