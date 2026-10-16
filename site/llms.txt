@@ -1,0 +1,7 @@
+# Engram — memory inside the model
+
+> Public project and website references. HTML pages are canonical; project goals are not claims of completed implementation.
+
+## Pages
+
+- [Engram — memory inside the model](https://alinaos-org.github.io/engram/): Engram is an open research project building a language model whose memory of its user lives in the network itself: inference-time neural memory, sleep consolidation into a per-user adapter, and detachable per-user modules.
