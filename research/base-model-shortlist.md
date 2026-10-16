@@ -140,7 +140,7 @@ All of Phase 0's 8B-class baseline and LoRA work fits on a g6e.xlarge. Only a 27
 | Role | Repo id | Licence | Why | Main risk |
 |---|---|---|---|---|
 | Primary | `Qwen/Qwen3-8B` | Apache-2.0 | Clean licence; densest retrofit literature (family); 0.6B→32B ladder | 32K native context; thinking default; no 32B base |
-| Fallback | `meta-llama/Llama-3.1-8B-Instruct` | Llama 3.1 Community | Llama 3 8B family used by TTT-NTP and In-Place TTT; 128K context | Licence conditions on distribution; gated |
+| Fallback | `meta-llama/Llama-3.1-8B-Instruct` | Llama 3.1 Community | Used by TTT-NTP and In-Place TTT; 128K context | Licence conditions on distribution; gated |
 | Alt. fallback | `mistralai/Mistral-7B-Instruct-v0.3` | Apache-2.0 | Used by TTT-NTP; clean licence | 2024-era; 32K context |
 | Hybrid comparator | `Qwen/Qwen3.5-9B` | Apache-2.0 | Gated DeltaNet hybrid, 262K, LoRA in vLLM | Multimodal wrapper; hybrid LoRA less trodden |
 | Dropped (deployment) | `nvidia/Nemotron-H-8B-*` | NVIDIA internal R&D | n/a | Licence bans production and deployment |
