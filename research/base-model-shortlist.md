@@ -23,7 +23,7 @@
 
 ## Candidate notes
 
-**1. Llama-3.1-8B-Instruct.** Download is gated behind manual approval on Hugging Face. The licence allows research and commercial use and creating derivatives. If you distribute the model, or a product or model that contains it, you must include the agreement and show "Built with Llama". A model trained from Llama outputs and then distributed must have a name that starts with "Llama". Use must follow Meta's Acceptable Use Policy. Licensees above 700M monthly active users need a separate licence. Private deployment with per-user adapters is allowed. Distributing adapters would trigger the attribution and naming terms. *Tooling:* registered in vLLM with LoRA support, ≥1,000 adapter repos. *Literature:* TTT-NTP (abstract) uses Llama-3.1-8B; In-Place TTT's paper body reports an extension with a model it calls "Llama3-8B" (version not confirmed). Titan-Llama uses the same family at 1B (Llama-3.2-1B-Instruct).
+**1. Llama-3.1-8B-Instruct.** Download is gated behind manual approval on Hugging Face. The licence allows research and commercial use and creating derivatives. If you distribute the model, or a product or model that contains it, you must include the agreement and show "Built with Llama". A model trained from Llama outputs and then distributed must have a name that starts with "Llama". Use must follow Meta's Acceptable Use Policy. Licensees above 700M monthly active users need a separate licence. Private deployment with per-user adapters is allowed. Distributing adapters would trigger the attribution and naming terms. *Tooling:* registered in vLLM with LoRA support, ≥1,000 adapter repos. *Literature:* TTT-NTP (abstract) uses Llama-3.1-8B; In-Place TTT's paper body reports an extension with LLaMA-3.1-8B (§4.1, Table 7). Titan-Llama uses the same family at 1B (Llama-3.2-1B-Instruct).
 
 **2. Qwen3-8B.** Ungated and Apache-2.0. One checkpoint switches between thinking and non-thinking modes. Thinking is on by default, so benchmark runs must set `enable_thinking=False`. The card warns against greedy decoding in thinking mode. The card names `vllm>=0.8.5` and `sglang>=0.4.6.post1` for serving. Registered in vLLM with LoRA support, ≥1,000 adapter repos. *Literature:* δ-mem attaches to Qwen3-8B (arXiv HTML). Several papers use smaller Qwen3 models: TTT-NTP (Qwen3-4B and 0.6B), LSTMem (Qwen3-4B-Instruct), In-Place TTT (Qwen3-4B-Base main, Qwen3-14B-Base extension), and Prometheus Mind (Qwen3-4B, per landscape.md).
 
@@ -54,13 +54,13 @@ No new Llama or Mistral text model in the 7–32B range appeared in a listing of
 | Paper (landscape.md) | Backbone(s) | Source checked |
 |---|---|---|
 | TTT-NTP | Llama-3.1-8B, Mistral-7B-v0.3, Qwen3-4B, Qwen3-0.6B | arXiv abstract 2606.21803 |
-| In-Place TTT | Qwen3-4B-Base (main); Qwen3-14B-Base and "Llama3-8B" (as the paper names it) in extensions | arXiv HTML 2604.06169 (abstract says only "4B") |
+| In-Place TTT | Qwen3-4B-Base (main); Qwen3-14B-Base and LLaMA-3.1-8B in extensions | arXiv HTML 2604.06169 (abstract says only "4B") |
 | Titan-Llama | Llama-3.2-1B-Instruct | landscape.md §5 |
 | LSTMem | Qwen3-4B-Instruct | arXiv abstract 2609.33268 |
 | δ-mem | Qwen3-8B, Qwen3-4B-Instruct, SmolLM3-3B | arXiv HTML 2605.12357 |
 | Prometheus Mind | Qwen3-4B | landscape.md §5 (not re-checked) |
 
-The Llama 3 8B family appears in two gradient-written TTT retrofits (TTT-NTP uses Llama-3.1-8B; In-Place TTT names "Llama3-8B"). The Qwen3 family is the most-used family overall, and its 0.6B and 4B siblings share a tokenizer and architecture with Qwen3-8B. That matters for the ≤1B reproduction in #6 and #7. landscape.md §1 has been updated to note the larger models in In-Place TTT's paper body.
+Llama-3.1-8B is used by two gradient-written TTT retrofits (TTT-NTP and In-Place TTT). The Qwen3 family is the most-used family overall, and its 0.6B and 4B siblings share a tokenizer and architecture with Qwen3-8B. That matters for the ≤1B reproduction in #6 and #7. landscape.md §1 has been updated to note the larger models in In-Place TTT's paper body.
 
 ## GPU memory estimates (assumptions)
 

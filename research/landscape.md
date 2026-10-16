@@ -50,12 +50,12 @@ Treats long context as continual learning. A sliding-window Transformer keeps tr
 - *Limits:* a frozen, off-the-shelf base was never meta-trained this way, so Engram must meta-train its memory adapter to get the benefit.
 
 **In-Place Test-Time Training.** Feng et al., Apr 2026 (ICLR 2026 oral, per the abstract page). [arXiv:2604.06169](https://arxiv.org/abs/2604.06169)
-Instead of adding a memory layer, it treats the output projection of each MLP block in an existing LLM as fast weights and updates them chunk by chunk during inference. The update objective is aligned with next-token prediction. Applied to a pretrained 4B model, it improves tasks with contexts up to 128K tokens; the full paper also reports runs with Qwen3-14B-Base and a Llama3-8B model.
+Instead of adding a memory layer, it treats the output projection of each MLP block in an existing LLM as fast weights and updates them chunk by chunk during inference. The update objective is aligned with next-token prediction. Applied to a pretrained 4B model, it improves tasks with contexts up to 128K tokens; the full paper also reports runs with Qwen3-14B-Base and LLaMA-3.1-8B. It still continues pretraining the model on its objective; it is not training-free.
 - *Strengths:* the most direct precedent for adding TTT to a released model without architectural surgery. A per-user delta on those projections would be a natural detachable artifact.
 - *Limits:* the abstract reports only 4B (larger models appear in the paper body), and it does not study whether memory persists across sessions.
 
 **Test-Time Training with Next-Token Prediction (TTT-NTP).** Ouyang, Cai, Hu, Jun 2026 (Findings of EMNLP 2026). [arXiv:2606.21803](https://arxiv.org/abs/2606.21803)
-A drop-in fast-weight method for already-pretrained models. Each write is supervised by the model's own next hidden state, so no value head needs to be trained. On RULER the authors report gains of about 3–4 points on every backbone tested, from 0.6B up to Llama-3.1-8B, with general knowledge preserved.
+A fast-weight method for already-pretrained models. It still continues pretraining, and per [fast-memory-design.md](fast-memory-design.md) it trains its projection together with the backbone. Each write is supervised by the model's own next hidden state, so no value head needs to be trained. On RULER the authors report gains of about 3–4 points on every backbone tested, from 0.6B up to Llama-3.1-8B, with general knowledge preserved.
 - *Strengths:* evidence at 8B, Engram's lower size bound, that writes on a released checkpoint help without harming general ability.
 - *Limits:* modest gains, and it only addresses use within a single context.
 

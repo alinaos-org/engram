@@ -79,7 +79,7 @@
 
 ### 1.8 Corrections for other notes (not edited here)
 - landscape §1 calls In-Place TTT and TTT-NTP "drop-in" for released models. Both still continually pretrain on 0.1–35B tokens: TTT-NTP trains its backbone too, and In-Place TTT most likely does (§1.2–1.3 above).
-- base-model-shortlist says In-Place TTT names "Llama3-8B (version not confirmed)". The paper's extension (§4.1, Table 7) uses **LLaMA-3.1-8B**. "Llama3-8B" appears only as a reference row in Table 1.
+- In-Place TTT's extension (§4.1, Table 7) uses **LLaMA-3.1-8B**; "Llama3-8B" appears only as a reference row in Table 1. (Corrected in base-model-shortlist.md.)
 
 ---
 
