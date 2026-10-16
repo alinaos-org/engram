@@ -1,0 +1,23 @@
+Accuracy by category
+category            n     acc          95% CI   stale
+abstention         60   1.000  [1.000, 1.000]   0.000
+decision           30   1.000  [1.000, 1.000]   0.000
+fact_recall       117   1.000  [1.000, 1.000]   0.000
+forget             45   0.422  [0.289, 0.578]   0.578
+incognito          53   1.000  [1.000, 1.000]   0.000
+preference        119   0.899  [0.840, 0.950]   0.000
+temporal           35   0.800  [0.657, 0.914]   0.000
+update            100   0.700  [0.610, 0.790]   0.200
+ALL               559   0.866  [0.837, 0.894]   0.082
+
+Accuracy by probe timing
+category            n     acc          95% CI   stale
+a                 202   0.876  [0.827, 0.921]   0.089
+b                 220   0.859  [0.809, 0.905]   0.077
+c                 137   0.861  [0.803, 0.912]   0.080
+ALL               559   0.866  [0.837, 0.894]   0.082
+
+Cross-user leakage (target: 0)
+deleted        checks=   47 leaks=0
+swap           checks=  169 leaks=0
+sweep          checks=   30 leaks=0

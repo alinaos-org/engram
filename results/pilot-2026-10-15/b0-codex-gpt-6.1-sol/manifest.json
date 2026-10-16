@@ -1,0 +1,36 @@
+{
+  "engram_version": "0.0.1",
+  "git_commit": "7190fb5fb45c5bdf400aca78760ff3c43c40b8c6",
+  "system": {
+    "system": "B0",
+    "model": "codex:gpt-6.1-sol"
+  },
+  "system_name": "b0-nomemory:codex:gpt-6.1-sol",
+  "bench": {
+    "config": {
+      "users": 10,
+      "sessions": 30,
+      "seed": 0,
+      "sleep_every": 3,
+      "late_sleeps": 3,
+      "items_per_user": 10,
+      "abstain_per_user": 3
+    },
+    "writer": "template"
+  },
+  "bench_sha256": "7da145a8112e91daa2f8c71a95af9e0bc9444ccdca1748158e38cfc201dafa2b",
+  "n_users": 10,
+  "workers": 4,
+  "session_replies": false,
+  "python": "3.13.16",
+  "host": "nova",
+  "wall_clock_s": 67.78,
+  "n_scores": 559,
+  "n_leak_checks": 0,
+  "cache": {
+    "hits": 516,
+    "misses": 43
+  },
+  "rescored": true,
+  "redacted_emails": 0
+}

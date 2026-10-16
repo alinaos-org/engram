@@ -1,0 +1,49 @@
+[
+  {
+    "question_id": "ku001",
+    "question_type": "knowledge-update",
+    "question": "Which city do I live in now?",
+    "answer": "Portland",
+    "question_date": "2023/06/01 (Thu) 09:00",
+    "haystack_session_ids": ["s_b", "s_a", "s_c"],
+    "haystack_dates": ["2023/05/20 (Sat) 18:30", "2023/05/02 (Tue) 10:15", "2023/05/20 (Sat) 08:05"],
+    "haystack_sessions": [
+      [
+        {"role": "user", "content": "Good news: I finished moving to Portland this weekend.", "has_answer": true},
+        {"role": "assistant", "content": "Congratulations on the move to Portland!"}
+      ],
+      [
+        {"role": "user", "content": "I live in Denver and I'm looking for hiking trails nearby.", "has_answer": true},
+        {"role": "assistant", "content": "Try the Mount Falcon trail, about thirty minutes from Denver."},
+        {"role": "user", "content": "Thanks, any easier ones?"},
+        {"role": "assistant", "content": "Red Rocks has a short loop."}
+      ],
+      [
+        {"role": "assistant", "content": "Welcome back! What can I help with today?"},
+        {"role": "user", "content": "Can you suggest a recipe for banana bread? Something quick."},
+        {"role": "assistant", "content": ""}
+      ]
+    ],
+    "answer_session_ids": ["s_a", "s_b"]
+  },
+  {
+    "question_id": "tr002_abs",
+    "question_type": "temporal-reasoning",
+    "question": "How many days passed between my violin recital and my piano exam?",
+    "answer": "The information provided is not enough. You mentioned the piano exam but not a violin recital.",
+    "question_date": "2023/03/10 (Fri) 12:00",
+    "haystack_session_ids": ["s_d", "s_e"],
+    "haystack_dates": ["2023/03/01 (Wed) 14:00", "2023/03/04 (Sat) 16:20"],
+    "haystack_sessions": [
+      [
+        {"role": "user", "content": "I just passed my grade 5 piano exam today!", "has_answer": true},
+        {"role": "assistant", "content": "Well done on passing grade 5 piano."}
+      ],
+      [
+        {"role": "user", "content": "What are good stretches before a long run?"},
+        {"role": "assistant", "content": "Leg swings and walking lunges work well."}
+      ]
+    ],
+    "answer_session_ids": ["s_d"]
+  }
+]

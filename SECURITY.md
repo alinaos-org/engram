@@ -16,6 +16,10 @@ Include what you found, how to reproduce it, and the impact you expect. We aim t
 - Extraction or membership-inference attacks against released adapters or memory modules.
 - Vulnerabilities in code, workflows, or the GitHub Pages site in this repository.
 
+## Threat model
+
+What Engram protects, from whom, and how each guarantee is tested in `engram-bench` is set out in [research/threat-model.md](research/threat-model.md).
+
 ## Out of scope
 
 - Weaknesses of upstream base models that Engram does not change (report those upstream).
