@@ -1,0 +1,36 @@
+name: Experiment
+description: A specific, runnable experiment with a hypothesis and a metric.
+title: "[exp] "
+labels: ["experiment"]
+body:
+  - type: textarea
+    id: hypothesis
+    attributes:
+      label: Hypothesis
+      description: What do you expect to happen, and why?
+    validations:
+      required: true
+  - type: textarea
+    id: setup
+    attributes:
+      label: Setup
+      description: Base model, memory configuration, data, eval split, seeds.
+    validations:
+      required: true
+  - type: textarea
+    id: metric
+    attributes:
+      label: Metrics and baselines
+      description: Which eval-design metrics decide the outcome, and against which baselines.
+    validations:
+      required: true
+  - type: input
+    id: compute
+    attributes:
+      label: Compute estimate
+      placeholder: e.g. 8×H100 for ~12 h (assumption)
+  - type: textarea
+    id: results
+    attributes:
+      label: Results
+      description: Fill in when the run completes. Link logs and configs.

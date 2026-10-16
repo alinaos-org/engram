@@ -1,0 +1,342 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Engram — memory inside the model</title>
+  <meta name="description" content="Engram is an open research project building a language model whose memory of its user lives in the network itself: inference-time neural memory, sleep consolidation into a per-user adapter, and detachable per-user modules.">
+  <meta name="color-scheme" content="light dark">
+  <meta property="og:title" content="Engram — memory inside the model">
+  <meta property="og:description" content="An open research project on language models that learn the person who runs them, in the weights.">
+  <meta property="og:type" content="website">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='12' fill='none' stroke='%233b5bdb' stroke-width='3'/%3E%3Ccircle cx='19' cy='13' r='4.5' fill='%23b35c1e'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="style.css">
+  <script>
+    // Apply a saved theme before first paint. Storage can be unavailable; fall back to the system setting.
+    (function () {
+      try {
+        var t = localStorage.getItem("engram-theme");
+        if (t === "light" || t === "dark") document.documentElement.setAttribute("data-theme", t);
+      } catch (e) {}
+    })();
+  </script>
+</head>
+<body>
+
+<header class="top">
+  <div class="wrap">
+    <a class="brand" href="#top" aria-label="Engram home">
+      <svg viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="12" fill="none" stroke="var(--accent)" stroke-width="3"/><circle cx="19" cy="13" r="4.5" fill="var(--warm)"/></svg>
+      Engram
+    </a>
+    <nav class="nav" aria-label="Sections">
+      <a href="#why">Why</a>
+      <a href="#how">How it works</a>
+      <a href="#roadmap">Roadmap</a>
+      <a href="#research">Research</a>
+      <a href="#status">Status</a>
+      <a href="#cite">Cite</a>
+    </nav>
+    <div class="actions">
+      <button class="icon-btn" id="theme" type="button" aria-label="Toggle colour theme" title="Toggle colour theme">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+      </button>
+      <a class="icon-btn" href="https://github.com/alinaos-org/engram" aria-label="Engram on GitHub">
+        <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 .5C5.7.5.5 5.7.5 12c0 5.1 3.3 9.4 7.9 10.9.6.1.8-.3.8-.6v-2c-3.2.7-3.9-1.5-3.9-1.5-.5-1.3-1.3-1.7-1.3-1.7-1-.7.1-.7.1-.7 1.2.1 1.8 1.2 1.8 1.2 1 1.8 2.8 1.3 3.4 1 .1-.8.4-1.3.8-1.6-2.6-.3-5.3-1.3-5.3-5.7 0-1.3.5-2.3 1.2-3.1-.1-.3-.5-1.5.1-3.2 0 0 1-.3 3.3 1.2a11.5 11.5 0 0 1 6 0C17.3 4.7 18.3 5 18.3 5c.7 1.7.2 2.9.1 3.2.8.8 1.2 1.8 1.2 3.1 0 4.4-2.7 5.4-5.3 5.7.4.4.8 1.1.8 2.2v3.3c0 .3.2.7.8.6A11.5 11.5 0 0 0 23.5 12C23.5 5.7 18.3.5 12 .5z"/></svg>
+        <span>GitHub</span>
+      </a>
+    </div>
+  </div>
+</header>
+
+<main id="top">
+
+  <div class="hero">
+    <div class="wrap">
+      <span class="eyebrow">Research preview · Phase 0</span>
+      <h1>Engram</h1>
+      <p class="tagline">A language model that remembers you in its weights, not in a prompt.</p>
+      <p class="lede">Engram is an open research project to put long-term memory inside the network: a fast memory that learns while you talk, a nightly “sleep” that consolidates it into your own adapter, and a log for exact facts. Your memory lives in a module you can detach, encrypt, or delete.</p>
+      <div class="cta">
+        <a class="btn primary" href="https://github.com/alinaos-org/engram">View on GitHub</a>
+        <a class="btn" href="https://github.com/alinaos-org/engram/blob/main/research/landscape.md">Read the research</a>
+      </div>
+      <div class="badges" aria-label="Project facts">
+        <span class="badge">license: Apache-2.0</span>
+        <span class="badge">status: research preview</span>
+        <span class="badge">base: open weights, 8–32B</span>
+      </div>
+    </div>
+  </div>
+
+  <section id="why">
+    <div class="wrap">
+      <p class="kicker">Why</p>
+      <h2>Retrieval remembers text. People expect a model to remember them.</h2>
+      <p class="intro">Today’s assistants “remember” by pasting notes back into the prompt. That recalls quoted facts well, but it does not let the model learn how you think, what you’ve already decided, or which of your facts have changed. Engram asks whether memory written into the network can do better.</p>
+      <div class="compare">
+        <div class="card">
+          <h3><span class="dot warm" aria-hidden="true"></span>Memory in the harness</h3>
+          <ul>
+            <li>Retrieves snippets; the model itself never changes.</li>
+            <li>Recall depends on the search query matching how you said it.</li>
+            <li>Every remembered item spends context on every turn.</li>
+            <li>Preferences and habits have to be written down to be used.</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h3><span class="dot cool" aria-hidden="true"></span>Memory in the network</h3>
+          <ul>
+            <li>The model learns from each session, so it adapts with use.</li>
+            <li>Knowledge is used implicitly, without being retrieved first.</li>
+            <li>Constant per-token cost, however long the history grows.</li>
+            <li>A per-user module: drop it and the memory is gone.</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="how">
+    <div class="wrap">
+      <p class="kicker">How it works</p>
+      <h2>Two speeds of memory around a frozen model.</h2>
+      <p class="intro">Inspired by how the brain pairs fast hippocampal learning with slow cortical consolidation. The base model never changes, so everything Engram learns about you sits in parts that belong to you.</p>
+      <div class="arch">
+        <figure class="diagram" style="margin:0">
+          <svg viewBox="0 0 420 590" role="img" aria-labelledby="diag-title diag-desc">
+            <title id="diag-title">Engram architecture</title>
+            <desc id="diag-desc">A session feeds a frozen base model. Inside a per-user memory module, a fast neural memory is read and written during inference, a sleep step consolidates it into a per-user LoRA adapter that adapts the base model, and a retrieval log serves exact lookups.</desc>
+            <defs>
+              <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="d-head" d="M0 0L10 5L0 10z"/></marker>
+            </defs>
+            <!-- Session -->
+            <rect class="d-box" x="110" y="14" width="200" height="40" rx="20"/>
+            <text class="d-title" x="210" y="39" text-anchor="middle" style="font-size:14px">Session</text>
+            <line class="d-line" x1="210" y1="54" x2="210" y2="90" marker-end="url(#arrow)"/>
+            <text class="d-label" x="218" y="77">context wiped after</text>
+            <!-- Base model -->
+            <rect class="d-base" x="36" y="92" width="360" height="72" rx="12"/>
+            <text class="d-title" x="216" y="122" text-anchor="middle">Frozen base model</text>
+            <text class="d-sub" x="216" y="144" text-anchor="middle">open weights · 8–32B · never updated</text>
+            <!-- Vault -->
+            <rect class="d-vault" x="16" y="200" width="388" height="376" rx="16"/>
+            <!-- Fast memory -->
+            <rect class="d-fast" x="36" y="272" width="140" height="100" rx="12"/>
+            <text class="d-title" x="106" y="306" text-anchor="middle">Fast memory</text>
+            <text class="d-sub" x="106" y="328" text-anchor="middle">neural module</text>
+            <text class="d-sub" x="106" y="348" text-anchor="middle">learns as you talk</text>
+            <!-- Slow memory -->
+            <rect class="d-slow" x="216" y="272" width="140" height="100" rx="12"/>
+            <text class="d-title" x="286" y="306" text-anchor="middle">Slow memory</text>
+            <text class="d-sub" x="286" y="328" text-anchor="middle">per-user LoRA</text>
+            <text class="d-sub" x="286" y="348" text-anchor="middle">trained in sleep</text>
+            <!-- Base <-> fast -->
+            <line class="d-line" x1="106" y1="166" x2="106" y2="270" marker-start="url(#arrow)" marker-end="url(#arrow)"/>
+            <text class="d-label accent" x="114" y="226">read · write</text>
+            <text class="d-label accent" x="114" y="242">(surprise-gated)</text>
+            <!-- Slow -> base -->
+            <line class="d-line" x1="286" y1="272" x2="286" y2="166" marker-end="url(#arrow)"/>
+            <text class="d-label warm" x="294" y="234">adapts</text>
+            <!-- Sleep -->
+            <line class="d-line" x1="176" y1="322" x2="214" y2="322" marker-end="url(#arrow)"/>
+            <text class="d-label" x="196" y="312" text-anchor="middle">sleep</text>
+            <!-- Log lookups -->
+            <line class="d-line dash" x1="380" y1="166" x2="380" y2="428" marker-start="url(#arrow)" marker-end="url(#arrow)"/>
+            <text class="d-label" transform="translate(394 300) rotate(90)" text-anchor="middle">exact lookups</text>
+            <!-- Retrieval log -->
+            <rect class="d-box" x="36" y="430" width="360" height="76" rx="12"/>
+            <text class="d-title" x="216" y="462" text-anchor="middle">Retrieval log</text>
+            <text class="d-sub" x="216" y="484" text-anchor="middle">exact facts · provenance · audit</text>
+            <!-- Vault label -->
+            <text class="d-title" x="36" y="538" style="font-size:14px">Your memory module</text>
+            <text class="d-sub" x="36" y="558">encrypted · detachable · delete = drop it</text>
+          </svg>
+        </figure>
+        <ol class="steps">
+          <li>
+            <h3>Frozen base model</h3>
+            <p>An open-weights model in the 8–32B range supplies language and world knowledge. Its weights are shared by everyone and never trained on any user, which keeps users isolated from each other.</p>
+          </li>
+          <li>
+            <h3>Fast memory</h3>
+            <p>A small neural memory, in the style of Titans and test-time training, is updated by gradient steps while the model reads. Writes are driven by surprise: what the model failed to predict is what it stores.</p>
+          </li>
+          <li>
+            <h3>Sleep consolidation</h3>
+            <p>Periodically, offline, what the fast memory has learned is distilled into a per-user LoRA adapter, using replay and self-generated rehearsal so new knowledge settles without overwriting the old.</p>
+          </li>
+          <li>
+            <h3>Retrieval log</h3>
+            <p>An append-only record of sessions acts as a backstop for exact details (numbers, names, dates) and as an audit trail of where each memory came from.</p>
+          </li>
+          <li>
+            <h3>Detachable, per-user modules</h3>
+            <p>Fast memory, adapter and log form one encrypted module per user. Forgetting someone means deleting their module rather than trying to scrub weights.</p>
+          </li>
+        </ol>
+      </div>
+    </div>
+  </section>
+
+  <section id="roadmap">
+    <div class="wrap">
+      <p class="kicker">Roadmap</p>
+      <h2>Measure first, then build.</h2>
+      <p class="intro">Each phase ends with a decision. Compute figures in the experiment plan are assumptions until measured.</p>
+      <ol class="phases">
+        <li class="card phase now">
+          <span class="num">Phase 0 · now</span>
+          <h3>Evals and baselines</h3>
+          <ul>
+            <li>Multi-session benchmark with context wiped between sessions</li>
+            <li>Recall, updates, forgetting, cross-user leakage</li>
+            <li>Frontier model + retrieval baselines</li>
+          </ul>
+        </li>
+        <li class="card phase">
+          <span class="num">Phase 1</span>
+          <h3>Memory module</h3>
+          <ul>
+            <li>Attach a neural memory to a frozen base</li>
+            <li>Continued pretraining on chunked documents</li>
+            <li>First sleep-consolidation recipe</li>
+          </ul>
+        </li>
+        <li class="card phase">
+          <span class="num">Phase 2</span>
+          <h3>Synthetic users</h3>
+          <ul>
+            <li>Simulated people over months-long timelines</li>
+            <li>SFT, then RL on memory-dependent rewards</li>
+            <li>Ablations of each memory tier</li>
+          </ul>
+        </li>
+        <li class="card phase">
+          <span class="num">Phase 3</span>
+          <h3>Private deployment</h3>
+          <ul>
+            <li>Encrypted per-user modules on local hardware</li>
+            <li>Deletion and audit tooling</li>
+            <li>Small opt-in pilot</li>
+          </ul>
+        </li>
+      </ol>
+    </div>
+  </section>
+
+  <section id="research">
+    <div class="wrap">
+      <p class="kicker">Research</p>
+      <h2>What we have read, and what we will test.</h2>
+      <p class="intro">Every source in these notes was opened and checked. Summaries are our own words.</p>
+      <div class="grid four">
+        <a class="card doc-link" href="https://github.com/alinaos-org/engram/blob/main/research/landscape.md">
+          <span class="path">research/landscape.md</span>
+          <h3>Landscape</h3>
+          <p>About 90 verified sources: test-time training, Titans, Nested Learning, memory layers, SSMs, continual learning, LoRA, editing and unlearning.</p>
+        </a>
+        <a class="card doc-link" href="https://github.com/alinaos-org/engram/blob/main/research/eval-design.md">
+          <span class="path">research/eval-design.md</span>
+          <h3>Eval design</h3>
+          <p>A draft benchmark for memory across sessions, with the context wiped each time.</p>
+        </a>
+        <a class="card doc-link" href="https://github.com/alinaos-org/engram/blob/main/research/experiment-plan.md">
+          <span class="path">research/experiment-plan.md</span>
+          <h3>Experiment plan</h3>
+          <p>Phases 0–3 with hypotheses, decision gates and compute assumptions.</p>
+        </a>
+        <a class="card doc-link" href="https://github.com/alinaos-org/engram/blob/main/research/open-questions.md">
+          <span class="path">research/open-questions.md</span>
+          <h3>Open questions</h3>
+          <p>What we don’t know yet, ranked by how much it could change the design.</p>
+        </a>
+      </div>
+      <div class="finding">
+        <p><strong>Where the evidence points (October 2026).</strong> Titans-style memory has just been retrofitted onto a frozen pretrained model, but only at 1B. Distilling rehearsal data from a teacher with the memories in context beats training on raw text. Sparse memory slots forget far less than LoRA. Gradient unlearning hides data rather than removing it, so dropping a per-user module is the stronger deletion. No one has yet combined these on a frozen 8–32B model across sessions. That gap is what Engram sets out to test.</p>
+        <p>Across about 100 sources, every citation was opened and checked against its source. See the <a href="https://github.com/alinaos-org/engram/blob/main/research/landscape.md#12-synthesis-what-this-means-for-engram">synthesis</a>.</p>
+      </div>
+    </div>
+  </section>
+
+  <section id="status">
+    <div class="wrap">
+      <p class="kicker">Status</p>
+      <h2>Research preview. No code or weights yet.</h2>
+      <p class="intro">Engram is at Phase 0: the literature survey and evaluation design are drafted, and the work is tracked as GitHub issues under the Phase 0 milestone.</p>
+      <div class="status-row">
+        <span class="pill done"><span class="dot" aria-hidden="true"></span>Landscape survey</span>
+        <span class="pill done"><span class="dot" aria-hidden="true"></span>Eval design draft</span>
+        <span class="pill wip"><span class="dot" aria-hidden="true"></span>Benchmark generator</span>
+        <span class="pill wip"><span class="dot" aria-hidden="true"></span>Baselines</span>
+        <span class="pill todo"><span class="dot" aria-hidden="true"></span>Memory module prototype</span>
+      </div>
+    </div>
+  </section>
+
+  <section id="contribute">
+    <div class="wrap">
+      <p class="kicker">Contributing</p>
+      <h2>Help us find out if this works.</h2>
+      <p class="intro">The most useful contributions now are careful reading, sharp questions, and small reproducible experiments. Never contribute real personal data; Engram uses synthetic users.</p>
+      <div class="cta">
+        <a class="btn primary" href="https://github.com/alinaos-org/engram/issues?q=is%3Aopen+milestone%3A%22Phase+0%22">Phase 0 issues</a>
+        <a class="btn" href="https://github.com/alinaos-org/engram/blob/main/CONTRIBUTING.md">Contributing guide</a>
+        <a class="btn" href="https://github.com/alinaos-org/engram/blob/main/SECURITY.md">Report a privacy issue</a>
+      </div>
+    </div>
+  </section>
+
+  <section id="cite">
+    <div class="wrap">
+      <p class="kicker">Citation</p>
+      <h2>Cite Engram</h2>
+      <div class="cite">
+<pre id="bibtex"><code>@misc{engram2026,
+  title        = {Engram: Language Models with Memory in the Network},
+  author       = {Mangano, Matthew and {Engram contributors}},
+  year         = {2026},
+  howpublished = {\url{https://github.com/alinaos-org/engram}},
+  note         = {Research preview}
+}</code></pre>
+        <button class="icon-btn copy" id="copy" type="button">Copy</button>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<footer>
+  <div class="wrap">
+    <span>Engram · Apache-2.0 · an <a href="https://github.com/alinaos-org">AlinaOS</a> research project · unrelated to DeepSeek’s Engram architecture</span>
+    <span><a href="https://github.com/alinaos-org/engram">Source</a> · <a href="https://github.com/alinaos-org/engram/issues">Issues</a> · <a href="https://github.com/alinaos-org/engram/blob/main/SECURITY.md">Security</a></span>
+  </div>
+</footer>
+
+<script>
+  (function () {
+    var root = document.documentElement;
+    var btn = document.getElementById("theme");
+    function current() {
+      var t = root.getAttribute("data-theme");
+      if (t) return t;
+      return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+    }
+    btn.addEventListener("click", function () {
+      var next = current() === "dark" ? "light" : "dark";
+      root.setAttribute("data-theme", next);
+      try { localStorage.setItem("engram-theme", next); } catch (e) {}
+    });
+
+    var copy = document.getElementById("copy");
+    copy.addEventListener("click", function () {
+      var text = document.getElementById("bibtex").innerText;
+      var done = function () { copy.textContent = "Copied"; setTimeout(function () { copy.textContent = "Copy"; }, 1600); };
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(done, function () {});
+      }
+    });
+  })();
+</script>
+</body>
+</html>

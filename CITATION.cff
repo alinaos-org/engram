@@ -1,0 +1,18 @@
+cff-version: 1.2.0
+message: "If you use or build on Engram, please cite it as below."
+title: "Engram: language models with memory in the network"
+type: software
+authors:
+  - family-names: Mangano
+    given-names: Matthew
+  - name: "Engram contributors"
+repository-code: "https://github.com/alinaos-org/engram"
+url: "https://alinaos-org.github.io/engram/"
+license: Apache-2.0
+date-released: "2026-10-15"
+keywords:
+  - continual learning
+  - test-time training
+  - neural memory
+  - personalization
+  - LoRA

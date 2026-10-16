@@ -1,0 +1,29 @@
+name: Research track
+description: Propose or track a line of research (a method to survey, prototype, or rule out).
+title: "[research] "
+labels: ["research"]
+body:
+  - type: textarea
+    id: question
+    attributes:
+      label: Question
+      description: What do we want to learn? State it so that an experiment could answer it.
+    validations:
+      required: true
+  - type: textarea
+    id: background
+    attributes:
+      label: Background and sources
+      description: Link the papers, code, or prior issues this builds on. Only cite sources you have opened.
+  - type: textarea
+    id: plan
+    attributes:
+      label: Plan
+      description: Reading, prototype, or experiment steps, with rough compute.
+  - type: textarea
+    id: done
+    attributes:
+      label: Done when
+      description: The concrete output that closes this issue (a note in research/, a result table, a decision).
+    validations:
+      required: true
