@@ -10,6 +10,7 @@ from __future__ import annotations
 import dataclasses
 import inspect
 import json
+import os
 import platform
 import re
 import subprocess
@@ -25,6 +26,8 @@ from engram.bench.dataset import Benchmark, content_hash
 from engram.bench.leakage import LeakCheck, run_leakage
 from engram.bench.schema import Phase, Probe
 from engram.bench.scoring import Score, format_table, score, summarise
+from engram.bench.seal import PER_PROBE, refuse_in_repo
+from engram.models.cache import usage
 from engram.systems.base import MemorySystem
 
 
@@ -56,11 +59,22 @@ def ask(system: MemorySystem, question: str, day: int | None = None) -> str:
 
 
 def _git_commit() -> str | None:
+    """HEAD of the engram checkout this code runs from, not of the cwd's repository, with
+    ``-dirty`` for uncommitted changes (as in ``engram.corpus.build``); None for an installed
+    copy. ``GIT_*`` variables (``GIT_DIR`` in a hook, say) are dropped: they override ``-C``."""
+    root = Path(__file__).resolve().parents[2]
+    env = {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
+
+    def git(*args: str) -> str:
+        cmd = ["git", "-C", str(root), *args]
+        return subprocess.run(
+            cmd, capture_output=True, text=True, check=True, timeout=5, env=env
+        ).stdout.strip()
+
     try:
-        out = subprocess.run(
-            ["git", "rev-parse", "HEAD"], capture_output=True, text=True, check=True, timeout=5
-        )
-        return out.stdout.strip()
+        if Path(git("rev-parse", "--show-toplevel")).resolve() != root:
+            return None  # an installed copy inside some other repository
+        return git("rev-parse", "HEAD") + ("-dirty" if git("status", "--porcelain") else "")
     except (OSError, subprocess.SubprocessError):
         return None
 
@@ -132,6 +146,7 @@ def run(
     valid for systems whose memory does not depend on their own replies (all current baselines).
     """
     started = time.time()
+    commit = _git_commit()  # the code that runs, not whatever is checked out when it ends
     sleeps = set(bench.sleeps)
     result = RunResult()
     parallel = workers > 1
@@ -174,12 +189,16 @@ def run(
             bench, system, targets_per_user=leak_targets_per_user, workers=workers
         )
 
+    bench_info = {"config": asdict(bench.config), "writer": bench.writer}
+    if bench.sealed:  # never record a sealed split's seed; bench_sha256 ties the run to it
+        bench_info["config"]["seed"] = None
+        bench_info["sealed"] = dict(bench.sealed)
     result.manifest = {
         "engram_version": __version__,
-        "git_commit": _git_commit(),
+        "git_commit": commit,
         "system": system.describe(),
         "system_name": system.name,
-        "bench": {"config": asdict(bench.config), "writer": bench.writer},
+        "bench": bench_info,
         "bench_sha256": content_hash(bench),
         "n_users": len(bench.users),
         "workers": workers,
@@ -191,8 +210,10 @@ def run(
         "n_leak_checks": len(result.leaks),
     }
     model = getattr(system, "model", None)
-    if model is not None and hasattr(model, "hits"):
+    if model is not None and hasattr(model, "hits"):  # kept for older readers; see "usage"
         result.manifest["cache"] = {"hits": model.hits, "misses": model.misses}
+    # What each model role drew from its backend; ``judge`` adds its own role to this.
+    result.manifest["usage"] = {"answer": usage(model)} if hasattr(model, "complete") else {}
     return result
 
 
@@ -206,7 +227,9 @@ def scrub(text: str) -> tuple[str, int]:
     return _EMAIL.subn("[redacted-email]", text)
 
 
-def save_run(result: RunResult, out: Path) -> Path:
+def save_run(result: RunResult, out: Path, *, allow_in_repo: bool = False) -> Path:
+    if result.manifest.get("bench", {}).get("sealed"):
+        refuse_in_repo(out, PER_PROBE, allow=allow_in_repo)
     out.mkdir(parents=True, exist_ok=True)
     redacted = 0
     for coll in (result.scores, result.leaks):
@@ -258,14 +281,35 @@ def apply_floor(scores: list[Score], floor: list[Score]) -> list[Score]:
 _NO_GOLD = {"abstention", "forget", "incognito"}
 
 
+def _leaks_by_kind(leaks: list[LeakCheck]) -> dict[str, list[LeakCheck]]:
+    by_kind: dict[str, list[LeakCheck]] = defaultdict(list)
+    for leak in leaks:
+        by_kind[leak.kind].append(leak)
+    return dict(sorted(by_kind.items()))
+
+
+def summary_json(
+    manifest: dict, scores: list[Score], leaks: list[LeakCheck], floor: dict | None = None
+) -> dict:
+    """The aggregates of ``report`` as one JSON object. It holds no probe ids, questions,
+    answers or values, so it is safe to commit for a sealed split."""
+    return {
+        "manifest": manifest,
+        "floor": floor,
+        "by_category": [asdict(s) for s in summarise(scores)],
+        "by_timing": [asdict(s) for s in summarise(scores, by="timing")],
+        "leakage": {
+            kind: {"checks": len(group), "leaks": sum(g.leaked for g in group)}
+            for kind, group in _leaks_by_kind(leaks).items()
+        },
+    }
+
+
 def report(scores: list[Score], leaks: list[LeakCheck], title: str = "") -> str:
     parts = [format_table(summarise(scores), title or "Accuracy by category")]
     parts.append(format_table(summarise(scores, by="timing"), "\nAccuracy by probe timing"))
     if leaks:
-        by_kind: dict[str, list[LeakCheck]] = defaultdict(list)
-        for leak in leaks:
-            by_kind[leak.kind].append(leak)
         parts.append("\nCross-user leakage (target: 0)")
-        for kind, group in sorted(by_kind.items()):
+        for kind, group in _leaks_by_kind(leaks).items():
             parts.append(f"{kind:<14} checks={len(group):>5} leaks={sum(g.leaked for g in group)}")
     return "\n".join(parts)

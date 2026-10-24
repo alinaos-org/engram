@@ -10,7 +10,9 @@ every report that uses them:
   ``auth.json`` (so token refreshes stay in one place) and a minimal config, so the user's own
   AGENTS.md, memories and MCP servers never reach the model. That matters in a memory benchmark.
 
-Calls are slow (seconds each) and rate-limited, so wrap them in ``CachedModel``.
+Calls are slow (seconds each) and rate-limited, so wrap them in ``CachedModel``. They draw on
+subscription pools shared with the operator's own use, so manifests record each model role's calls,
+CLI ``attempts`` and ``pool`` (``engram.models.cache.usage``); nothing reads the rate limits.
 """
 
 from __future__ import annotations
@@ -20,6 +22,7 @@ import json
 import os
 import subprocess
 import tempfile
+import threading
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -46,14 +49,21 @@ def _transcript(messages: list[Message]) -> tuple[str, str]:
     return system, "\n".join(lines)
 
 
-def _retrying(fn, retries: int, base_delay: float):
-    for attempt in range(retries):
+_attempts_lock = threading.Lock()
+
+
+def _retrying(cli, fn):
+    """Call ``fn`` up to ``cli.retries`` times. Each try is a CLI invocation that draws on the
+    subscription whether or not it succeeds, so each is counted in ``cli.attempts``."""
+    for attempt in range(cli.retries):
+        with _attempts_lock:  # runs call one adapter from many threads
+            cli.attempts += 1
         try:
             return fn()
         except (CLIError, subprocess.TimeoutExpired):
-            if attempt == retries - 1:
+            if attempt == cli.retries - 1:
                 raise
-            time.sleep(base_delay * 3**attempt)
+            time.sleep(cli.retry_delay * 3**attempt)
     raise AssertionError("unreachable")
 
 
@@ -61,11 +71,13 @@ def _retrying(fn, retries: int, base_delay: float):
 class ClaudeCLI:
     """Claude via ``claude -p`` on the user's subscription."""
 
+    pool = "claude-subscription"  # the shared pool its calls draw on, named in run manifests
     model: str = "claude-opus-5-5"
     effort: str = "low"
     timeout: float = 300.0
     retries: int = 3
     retry_delay: float = 10.0
+    attempts: int = field(default=0, init=False)  # CLI invocations, retries included
 
     @property
     def name(self) -> str:
@@ -98,9 +110,7 @@ class ClaudeCLI:
 
     def complete(self, messages: list[Message], *, max_tokens: int = 512) -> str:
         system, prompt = _transcript(messages)
-        return strip_think(
-            _retrying(lambda: self._call(system, prompt), self.retries, self.retry_delay)
-        )
+        return strip_think(_retrying(self, lambda: self._call(system, prompt)))
 
 
 # Account-level apps and plugins would add tool definitions to the model's context, and agent
@@ -141,12 +151,14 @@ def isolated_codex_home(root: Path = CACHE_ROOT) -> Path:
 class CodexCLI:
     """OpenAI models via ``codex exec`` on the user's ChatGPT subscription."""
 
+    pool = "chatgpt-subscription"
     model: str = "gpt-6.1-sol"
     effort: str = "low"
     timeout: float = 300.0
     retries: int = 3
     retry_delay: float = 10.0
     home: Path = field(default_factory=isolated_codex_home)
+    attempts: int = field(default=0, init=False)
 
     @property
     def name(self) -> str:
@@ -181,4 +193,4 @@ class CodexCLI:
             f"Follow these instructions for your reply:\n{system}\n\n{prompt}\n\n"
             "Reply with your answer to the user only. Do not run commands or inspect files."
         )
-        return strip_think(_retrying(lambda: self._call(full), self.retries, self.retry_delay))
+        return strip_think(_retrying(self, lambda: self._call(full)))

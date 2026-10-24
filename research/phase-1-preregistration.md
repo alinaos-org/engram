@@ -11,7 +11,7 @@ Phase 1 asks whether a test-time-trained memory attached to a **frozen** base mo
 | Item | Value |
 |---|---|
 | Base model | `Qwen/Qwen3-8B`, frozen, thinking disabled ([shortlist](base-model-shortlist.md)). Any change of base needs an amendment |
-| Benchmark | `engram-bench` **v1**: v0 plus long LLM-written sessions that exceed a 128K context, 50 users, 30 sessions, seed fixed at generation and recorded by hash. Generated once and frozen before the first run. Not used for training or tuning |
+| Benchmark | `engram-bench` **v1**: v0 plus long LLM-written sessions that exceed a 128K context, 50 users, 30 sessions, seed fixed at generation and recorded by hash. Generated once and frozen before the first run. Not used for training or tuning. The test split is **sealed** per [sealed-split.md](sealed-split.md): the seed stays private, its commitment and the dataset hash are published before the first run, and the seed is revealed after the Phase 1 results |
 | Tuning split | A separate `engram-bench` dev set (different seed, 20 users). All hyperparameter selection happens here |
 | Comparators | B3: same base + hybrid retrieval. **B5: Mem0 on the same base** (extract-and-consolidate, with explicit update and delete). B4: same base + per-user LoRA on transcripts. B1: full context, for reference only |
 | Systems under test | **E-fast**: memory module only, no adapter, no log. **E-full**: fast memory + sleep-consolidated adapter + retrieval log |
