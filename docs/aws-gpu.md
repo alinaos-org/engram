@@ -9,6 +9,7 @@ All infrastructure is code: [`infra/aws/engram-gpu.yaml`](../infra/aws/engram-gp
 - **No SSH and no inbound ports.** Access is through AWS Systems Manager (port forwarding and remote commands).
 - **Hard time cap.** Every instance schedules its own shutdown after `--hours` (default 4, maximum 24), and its shutdown behaviour is *terminate*. A forgotten instance stops costing money at the cap.
 - **One instance at a time.** `up` refuses to launch while another `Project=engram` instance is running.
+- **Explicit approval per launch.** A real `up` refuses to start without `--approval`, a short reference to the operator's explicit approval for that launch (a date and where it was given, such as `2026-10-24:chat`). It becomes the `Approval` tag on the instance and its volume. `--dry-run` needs none.
 - **Narrow permissions.** The instance role can use SSM and read and write one private, encrypted bucket. Nothing else.
 - **Budget alerts** at 50% and 80% of actual spend, and at 100% of forecast spend.
 
@@ -44,7 +45,7 @@ Memory estimates for each candidate base model are in [research/base-model-short
 ## A GPU day
 
 ```bash
-scripts/aws/gpu.sh up --type g6e.2xlarge --spot --hours 5 --model Qwen/Qwen3-8B --ref main
+scripts/aws/gpu.sh up --type g6e.2xlarge --spot --hours 5 --model Qwen/Qwen3-8B --ref main --approval 2026-10-24:chat
 ```
 ```bash
 scripts/aws/gpu.sh wait

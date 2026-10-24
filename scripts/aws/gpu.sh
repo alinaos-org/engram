@@ -2,8 +2,8 @@
 # Engram GPU instances on AWS: launch, reach, run, pull results, terminate.
 #
 #   scripts/aws/gpu.sh stack --alert-email you@example.com [--budget 300]   # one-time setup
-#   scripts/aws/gpu.sh up [--type g6e.xlarge] [--spot] [--hours 4] [--model Qwen/Qwen3-8B]
-#                         [--ref main] [--dry-run]
+#   scripts/aws/gpu.sh up --approval REF [--type g6e.xlarge] [--spot] [--hours 4]
+#                         [--model Qwen/Qwen3-8B] [--ref main] [--dry-run]
 #   scripts/aws/gpu.sh status
 #   scripts/aws/gpu.sh wait                 # until vLLM is serving
 #   scripts/aws/gpu.sh tunnel [8000]        # forward the instance's vLLM to localhost
@@ -14,7 +14,9 @@
 #
 # Safety: instances have no SSH keys and no inbound ports (SSM only), are tagged Project=engram,
 # and schedule their own shutdown after --hours with shutdown behaviour "terminate", so a
-# forgotten instance cannot run past the cap. Nothing here runs unless you call it.
+# forgotten instance cannot run past the cap. A real launch needs --approval REF, a reference
+# to the operator's explicit approval (a date and where it was given, e.g. 2026-10-24:chat),
+# kept as the Approval tag; --dry-run needs none. Nothing here runs unless you call it.
 set -euo pipefail
 
 PROFILE=${AWS_PROFILE:-alina-admin}
@@ -91,9 +93,13 @@ cmd_stack() {
 }
 
 cmd_up() {
-  local type=g6e.xlarge spot=0 hours=4 model=Qwen/Qwen3-8B ref=main dry=()
+  local type=g6e.xlarge spot=0 hours=4 model=Qwen/Qwen3-8B ref=main approval="" dry=()
   while [[ $# -gt 0 ]]; do
+    case $1 in  # a value option given last would die on set -u with bash's own message
+      --approval|--type|--hours|--model|--ref) [[ $# -ge 2 ]] || die "$1 needs a value" ;;
+    esac
     case $1 in
+      --approval) approval=$2; shift 2 ;;
       --type) type=$2; shift 2 ;;
       --spot) spot=1; shift ;;
       --hours) hours=$2; shift 2 ;;
@@ -104,6 +110,14 @@ cmd_up() {
     esac
   done
   [[ $hours =~ ^[0-9]+$ && $hours -ge 1 && $hours -le 24 ]] || die "--hours must be 1-24"
+  if [[ -z $approval ]]; then
+    [[ ${#dry[@]} -gt 0 ]] || die "--approval REF is required: when and where the operator" \
+      "explicitly approved this launch, e.g. --approval 2026-10-24:chat"
+    approval="dry-run"  # placeholder: a dry run launches nothing
+  fi
+  # The value goes inside --tag-specifications, so no commas, spaces, brackets or braces.
+  [[ $approval =~ ^[A-Za-z0-9][A-Za-z0-9._:/-]{0,99}$ ]] \
+    || die "--approval: 1-100 characters from A-Za-z0-9._:/-, starting with a letter or digit"
   local ami profile sg market=()
   ami=$(aws ssm get-parameter --name "$AMI_PARAM" --query Parameter.Value --output text)
   if [[ ${#dry[@]} -eq 0 ]]; then
@@ -114,19 +128,21 @@ cmd_up() {
   fi
   [[ $spot -eq 1 ]] && market=(--instance-market-options \
     'MarketType=spot,SpotOptions={SpotInstanceType=one-time,InstanceInterruptionBehavior=terminate}')
+  local tags="{Key=Project,Value=engram},{Key=Approval,Value=$approval}"
   local args=(
     --image-id "$ami" --instance-type "$type" --count 1
     --instance-initiated-shutdown-behavior terminate
     --metadata-options HttpTokens=required
     --block-device-mappings 'DeviceName=/dev/sda1,Ebs={VolumeSize=200,VolumeType=gp3,DeleteOnTermination=true}'
-    --tag-specifications "ResourceType=instance,Tags=[{Key=Project,Value=engram},{Key=Name,Value=engram-gpu},{Key=Model,Value=$model}]" \
-      "ResourceType=volume,Tags=[{Key=Project,Value=engram}]"
+    --tag-specifications "ResourceType=instance,Tags=[$tags,{Key=Name,Value=engram-gpu},{Key=Model,Value=$model}]" \
+      "ResourceType=volume,Tags=[$tags]"
     --user-data "$(user_data "$model" "$ref" "$hours")"
   )
   if [[ ${#dry[@]} -eq 0 ]]; then
     args+=(--iam-instance-profile "Name=$profile" --security-group-ids "$sg")
   fi
-  echo "launching $type (spot=$spot) for at most ${hours}h, model $model, ref $ref, AMI $ami"
+  echo "launching $type (spot=$spot) for at most ${hours}h, model $model, ref $ref, AMI $ami," \
+    "approval $approval"
   aws ec2 run-instances "${dry[@]}" "${market[@]}" "${args[@]}" \
     --query 'Instances[0].InstanceId' --output text
 }
@@ -201,5 +217,5 @@ case $sub in
   push-runs) cmd_push_runs ;;
   pull) cmd_pull ;;
   down) cmd_down ;;
-  *) sed -n '2,17p' "$0"; exit 1 ;;
+  *) sed -n '2,19p' "$0"; exit 1 ;;
 esac

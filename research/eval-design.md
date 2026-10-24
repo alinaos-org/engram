@@ -160,7 +160,7 @@ Links: Mem0 [arXiv:2504.19413](https://arxiv.org/abs/2504.19413), Zep [arXiv:250
 
 ## Reporting
 
-For each system: a table of all 12 categories at each probe timing, with 95% CIs. Also cost per user per month at the default timeline, and the leakage and forgetting checks as pass/fail with the raw counts. Results are published with configs, seeds and generator prompts so others can regenerate the benchmark.
+For each system: a table of all 12 categories at each probe timing, with 95% CIs. Also cost per user per month at the default timeline, and the leakage and forgetting checks as pass/fail with the raw counts. Results are published with configs, seeds and generator prompts so others can regenerate the benchmark. The Phase 1 test split is the exception: its seed and per-probe results stay private until its results are published ([sealed-split.md](sealed-split.md)).
 
 ## Open design questions
 

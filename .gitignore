@@ -233,3 +233,4 @@ data/private/
 # engram-bench outputs
 data/
 runs/
+*.seed.json
