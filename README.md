@@ -77,6 +77,7 @@ Details, hypotheses and compute assumptions are in [research/experiment-plan.md]
 | [**Experiment plan**](research/experiment-plan.md) | Phases 0–3 with hypotheses, decision gates and compute estimates (stated as assumptions) |
 | [**Phase 0 plan**](research/phase-0-plan.md) | Gate for entering Phase 1, workstreams, timeline, budget, decisions needed |
 | [**Open questions**](research/open-questions.md) | What we don't know yet, ordered by how much the answer could change the design |
+| [**Adaptive control and test-time memory**](research/adaptive-control-and-test-time-memory.md) | What adaptive control and online estimation know about changing parameters online without losing stability, mapped onto fast-memory writes and sleep consolidation, with nine untested proposals |
 
 **Where the evidence points so far** (October 2026):
 
