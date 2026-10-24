@@ -14,12 +14,12 @@ All infrastructure is code: [`infra/aws/engram-gpu.yaml`](../infra/aws/engram-gp
 
 ## One-time setup (needs your approval: these change the account)
 
-1. **Request GPU quota.** Every GPU quota is currently **0**, so no GPU instance can launch. Quotas are counted in vCPUs, and 16 covers one g6e.2xlarge or g6e.4xlarge with room to spare. Requests are free; approval can take hours to days.
+1. **GPU quota (done 2026-10-16).** Requests for 16 vCPUs were filed on 2026-10-15; AWS granted **8 vCPUs** for each of the two quotas below, and the support cases for the remainder are still open. Quotas count vCPUs, so 8 covers exactly one g6e.xlarge or g6e.2xlarge at a time; a g6e.4xlarge (16 vCPUs) or anything larger cannot launch yet. The same quotas cover every G and VT instance in the account, not only Engram's. Check them with:
    ```bash
-   aws service-quotas request-service-quota-increase --service-code ec2 --quota-code L-DB2E81BA --desired-value 16 --profile alina-admin --region us-west-2
+   aws service-quotas get-service-quota --service-code ec2 --quota-code L-DB2E81BA --profile alina-admin --region us-west-2 --query Quota.Value
    ```
    ```bash
-   aws service-quotas request-service-quota-increase --service-code ec2 --quota-code L-3819A6DF --desired-value 16 --profile alina-admin --region us-west-2
+   aws service-quotas get-service-quota --service-code ec2 --quota-code L-3819A6DF --profile alina-admin --region us-west-2 --query Quota.Value
    ```
    The first is on-demand G and VT instances; the second is G and VT spot requests.
 2. **Deploy the support stack:** the bucket, instance role, security group and budget.
@@ -36,6 +36,8 @@ All infrastructure is code: [`infra/aws/engram-gpu.yaml`](../infra/aws/engram-gp
 | **g6e.2xlarge** (recommended) | 1× L40S 48 GB | 8 | 2.24 | 1.26 | same GPU, more CPU for embedding and data loading |
 | g6e.12xlarge | 4× L40S | 48 | 10.49 | 9.27 | 32B models, parallel runs |
 | p5.48xlarge | 8× H100 80 GB | 192 | 55.04 | 26.87 | Phase 1 training, not Phase 0 |
+
+With the current 8-vCPU quotas only the first two rows can launch; the larger ones need a further increase.
 
 Memory estimates for each candidate base model are in [research/base-model-shortlist.md](../research/base-model-shortlist.md). Qwen3-8B needs about 19 GB to serve and about 26 GB for LoRA at 4K context, so one L40S covers all of Phase 0.
 

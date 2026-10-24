@@ -103,7 +103,7 @@ Module swap, canary sweep, retrieval-log ownership gating, and storage audit aft
    - Rate limits are shared with Matt's interactive use, so runs use about 4 parallel workers.
 
 **Still open:**
-1. **GPU quota.** Every EC2 GPU quota on the account is 0. Requesting 16 vCPUs for G/VT on-demand and spot is free but changes the account. See the runbook.
+1. **GPU quota.** Granted 2026-10-16: 8 vCPUs (of 16 requested) for G/VT on-demand and for G/VT spot, enough for one g6e.2xlarge at a time. The cases for the rest are still open. See the runbook.
 2. **Support stack and budget.** Deploy `infra/aws/engram-gpu.yaml` (bucket, SSM-only instance role, no-ingress security group, $300 per month budget alerts) and choose the alert email.
 3. **Session generator:** it must differ in model family from the base. If generated sessions will later train Engram (Phase 2), it should be open-weights. Candidate: a non-Qwen open model served on the GPU day.
 4. **Name:** keep "Engram" despite DeepSeek's architecture of the same name, or rename now while it is cheap.
